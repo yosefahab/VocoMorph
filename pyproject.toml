@@ -1,0 +1,10 @@
+[project]
+name = "VocoMorph"
+version = "0.1.0"
+dependencies = ["pydub", "pandas", "numpy"]
+
+[project.scripts]
+streamer = "vocomorph.streamer:main"
+
+[project.gui-scripts]
+streamer = "vocomorph.ui:main"

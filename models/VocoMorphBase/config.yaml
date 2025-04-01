@@ -1,0 +1,126 @@
+project: "VocoMorph"
+notes: "Neural Vocal Modulator"
+# ------------------------------------------------------------------------------------------------------------------------------ #
+config:
+  # ------------------------------------------------------------ #
+  seed: 13
+
+  data:
+    num_workers: 14
+    pin_memory: false
+    drop_last: false
+
+    channels: &var_channels 2 # mono/stereo
+    sample_rate: &var_sample_rate 16_000
+    n_mels: &var_n_mels 80
+    n_fft: &var_n_fft 1024
+    win_length: &var_win_length 1024
+    hop_length: &var_hop_length 256
+
+    frame_length: &var_frame_length 1024 # the chunk of audio the model processes at a time
+    max_length: 160_000 # 10 sec at 16k sr
+
+    dataset: "timit"
+
+    dataset_path:
+      timit: "data/TIMIT"
+      librispeech: "data/librispeech"
+
+    datalist_dir: "data/metadata"
+    batch_size: 2
+    effects:
+      &var_modulation_effects [
+        "identity_transform",
+        "apply_pitch_shift",
+        "apply_radio_effect",
+        "apply_robotic_effect",
+        "apply_scifi_effect",
+      ]
+  # ------------------------------------------------------------ #
+  model:
+    module_condition_encoder:
+      effects: *var_modulation_effects
+      embedding_dim: 128
+
+    module_tcn:
+      channels: *var_channels
+        
+      input_dim: *var_frame_length
+      output_dim: *var_frame_length
+      kernel_size: 3
+      num_layers: 6
+  # ------------------------------------------------------------ #
+  criterion:
+    name: [
+        "L1Loss",
+        "MSELoss",
+        "STFTLoss",
+        "MultiResolutionSTFTLoss",
+        "VocalModulationLoss",
+      ]
+    STFTLoss:
+      n_fft: *var_n_fft
+      hop_length: *var_hop_length
+      win_length: *var_win_length
+    MultiResolutionSTFTLoss:
+      alpha: 0.5
+      beta: 0.5
+      # n_fft, hop_length, win_length
+      resolutions: [
+      # Good frequency resolution, medium time resolution
+          [1024, 1024, 256], 
+      # Excellent frequency resolution, poor time resolution
+          [2048, 2048, 512], 
+      # Moderate frequency resolution, good time resolution
+          [512, 512, 128], 
+        ]
+    MelSpecLoss:
+      alpha: 0.5
+      beta: 0.5
+      sample_rate: *var_sample_rate
+      n_mels: *var_n_mels
+      n_fft: *var_n_fft
+      hop_length: *var_hop_length
+      win_length: *var_win_length
+
+    VocalModulationLoss:
+      alpha: 0.3
+      beta: 0.3
+      gamma: 0.3
+      sample_rate: *var_sample_rate
+      n_mels: *var_n_mels
+      n_fft: *var_n_fft
+      hop_length: *var_hop_length
+      win_length: *var_win_length
+  # ------------------------------------------------------------ #
+  optimizer:
+    name: ["AdamW"]
+    AdamW:
+      lr: 1.0e-3
+      weight_decay: 1.0e-2
+  # ------------------------------------------------------------ #
+  scheduler:
+    name: ["ReduceLROnPlateau"]
+    ReduceLROnPlateau:
+      mode: "min"
+      min_lr: 1.0e-10
+      factor: 0.8
+      patience: 2
+    WarmupConstantSchedule:
+      warmup_steps: 1000
+    # ------------------------------------------------------------ #
+  metrics:
+    name: ["MeanSquaredError"]
+  # ------------------------------------------------------------ #
+  trainer:
+    max_epoch: 200
+    gpuid: "0" ### "0"(single-gpu) or "0, 1" (multi-gpu)
+    clip_norm: 5
+    start_scheduling: 50
+    test_epochs: [50, 100, 150, 200]
+    precision: "fp16"
+
+  checkpointer:
+    save_interval: 1 # num epochs to save checkpoint
+    save_best: null
+    keep_last_n: null # false or int
