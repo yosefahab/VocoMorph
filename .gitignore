@@ -12,6 +12,7 @@ venv.bak/
 __pycache__/
 
 *.log
+logs/
 checkpoints/
 data/
 output/

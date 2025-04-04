@@ -1,4 +1,5 @@
 # VocoMorph
+Neural Voice Modulation
 
 ## Config
 The YAML files can be modified to reference both custom and builtin functions/classes for criterions, schedulers & metrics.

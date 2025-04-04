@@ -33,5 +33,5 @@ def create_model_instance(model_name: str, config: Dict[str, Any]) -> torch.nn.M
         return model_class(config)
 
     except Exception as e:
-        logger.critical(f"Error creating model {model_name}: {e}")
+        logger.exception(f"Error creating model {model_name}: {e}")
         exit(1)
