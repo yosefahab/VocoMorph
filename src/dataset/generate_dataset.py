@@ -136,9 +136,14 @@ def augment_files(
 
     os.makedirs(output_dir, exist_ok=True)
 
+    def generate_augmentation_args(df: pd.DataFrame, sr: int, output_dir: str, effects: List[str]):
+        """Generates arguments for _augment_wav on demand."""
+        for _, row in df.iterrows():
+            yield (row, sr, output_dir, effects)
+
     with Pool() as p:
-        args_list = [(row, sr, output_dir, effects) for _, row in df.iterrows()]
-        results = list(tqdm(p.imap(_augment_wav, args_list), total=len(df)))
+        args_generator = generate_augmentation_args(df, sr, output_dir, effects)
+        results = list(tqdm(p.imap(_augment_wav, args_generator), total=len(df)))
 
     df_processed = pd.DataFrame([item for sublist in results for item in sublist])
 
@@ -154,11 +159,10 @@ def create_splits(dataset: str):
 
     for split in ["train", "valid", "test"]:
         split_dir = os.path.join(dataset_dir, split)
-        csv_out_fp = os.path.join(metadata_dir, f"{dataset}_{split}.csv")
-
         if os.path.exists(split_dir):
-            logger.info(f"creating {split} csv")
-            create_split_csv(split_dir, csv_out_fp)
+            logger.info(f"Creating {split} csv")
+            split_csv = os.path.join(metadata_dir, f"{dataset}_{split}.csv")
+            create_split_csv(split_dir, split_csv)
         # timit comes with no validation set, so we create one from train set
         elif dataset.lower() == "timit" and split == "valid":
             logger.warning(f"{split_dir} missing, splitting train set instead")
@@ -177,14 +181,12 @@ def augment_dataset(dataset: str, config: dict):
     os.makedirs(output_dir, exist_ok=True)
 
     for split in ["train", "valid", "test"]:
-        split_csv_fp = os.path.join(metadata_dir, f"{dataset}_{split}.csv")
-        if not os.path.exists(split_csv_fp):
-            logger.warning(f"{split_csv_fp} does not exist, skipping augmentation.")
+        split_csv = os.path.join(metadata_dir, f"{dataset}_{split}.csv")
+        if not os.path.exists(split_csv):
+            logger.warning(f"{split_csv} does not exist, skipping augmentation.")
             continue
         logger.info(f"Augmenting {split}")
-        output_csv_name = f"{dataset}_{split}_augmented.csv"
-        output_csv_fp = os.path.join(metadata_dir, output_csv_name)
-        augment_files(split_csv_fp, sr, effects, output_dir, output_csv_fp)
+        augment_files(split_csv, sr, effects, output_dir, split_csv)
 
 
 def main(dataset: str, config: dict):
