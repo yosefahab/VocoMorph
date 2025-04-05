@@ -24,11 +24,8 @@ config:
 
     dataset: "timit"
 
-    dataset_path:
-      timit: "data/TIMIT"
-      librispeech: "data/librispeech"
+    metadata_dir: "data/metadata"
 
-    datalist_dir: "data/metadata"
     batch_size: 1
     effects:
       &var_modulation_effects [

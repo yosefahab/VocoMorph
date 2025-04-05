@@ -1,4 +1,5 @@
 import os
+import shutil
 import tarfile
 import zipfile
 import requests
@@ -86,24 +87,32 @@ def download_librispeech(subset: str, destination_dir: str, remove_tar: bool = T
     return True
 
 
-def download_timit(destination_dir: str, remove_zip: bool = True):
+def download_timit(destination_dir: str, remove_zip: bool = True) -> bool:
     """Downloads and extracts the TIMIT dataset."""
-    dataset_dir = os.path.join(destination_dir, "TIMIT")
-    os.makedirs(dataset_dir, exist_ok=True)
+    os.makedirs(destination_dir, exist_ok=True)
 
     zip_path = os.path.join(destination_dir, "timit.zip")
 
     if not download_file(TIMIT_URL, zip_path):
         return False
 
-    if not extract_zipfile(zip_path, dataset_dir):
+    if not extract_zipfile(zip_path, destination_dir):
+        logger.info(f"Extracted {zip_path} to {destination_dir}")
         return False
 
     if remove_zip:
         os.remove(zip_path)
         logger.info(f"Removed {zip_path}")
 
-    logger.info("Finished processing TIMIT dataset")
+    # this specific url nests the dataset, so we need to move it to the destination_dir
+    timit_path = os.path.join(destination_dir, "data/lisa/data/timit/raw/TIMIT")
+    for item in ["TRAIN", "TEST"]:
+        s = os.path.join(timit_path, item)
+        d = os.path.join(destination_dir, item.lower())
+        shutil.move(s, d)
+
+    shutil.rmtree(os.path.join(destination_dir, "data"))
+    logger.info("Finished downloading TIMIT dataset")
     return True
 
 
@@ -129,9 +138,9 @@ def main(dataset: str):
                 try:
                     success = future.result()
                     if not success:
-                        logger.error(f"Failed to process {subset}")
+                        logger.error(f"Failed to download {subset}")
                 except Exception as e:
-                    logger.error(f"Exception while processing {subset}: {e}")
+                    logger.error(f"Exception while downloading {subset}: {e}")
 
     elif dataset == "timit":
         download_timit(destination_dir)

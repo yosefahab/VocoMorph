@@ -17,16 +17,12 @@ config:
     win_length: &var_win_length 1024
     hop_length: &var_hop_length 256
 
-    frame_length: &var_frame_length 1024 # the chunk of audio the model processes at a time
+    # the chunk of audio the model processes at a time
+    frame_length: 1024 
     max_length: 160_000 # 10 sec at 16k sr
 
     dataset: "timit"
 
-    dataset_path:
-      timit: "data/TIMIT"
-      librispeech: "data/librispeech"
-
-    datalist_dir: "data/metadata"
     batch_size: 2
     effects: &var_effects [
         "identity_transform",

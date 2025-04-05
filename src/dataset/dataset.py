@@ -122,11 +122,12 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
     for split in splits:
         datalist_filepath = os.path.join(
             os.environ["PROJECT_ROOT"],
-            config["datalist_dir"],
+            "data",
+            "metadata",
             f"{dataset_name}_{split}.csv",
         )
         logger.info(f"Loading data from {datalist_filepath}")
-        num_workers = min(config['num_workers'], cpu_count()-2)
+        num_workers = min(config["num_workers"], cpu_count() - 2)
         logger.info(f"Using {num_workers} workers for DataLoaders")
         dataset = VocoMorphDataset(config, datalist_filepath=datalist_filepath)
         logger.info(f"Creating dataloader for split: {split}")

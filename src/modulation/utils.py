@@ -49,7 +49,7 @@ def call_functions_by_name(function_names: List[str], *args, **kwargs) -> list:
 
     for name in function_names:
         if not hasattr(module, name):
-            logger.critical(f"Effect {name} not implemented in {module}!")
+            logger.critical(f"Effect {name} not implemented in {module}! Terminating")
             exit(1)
 
         func = getattr(module, name)
