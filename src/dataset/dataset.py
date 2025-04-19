@@ -76,6 +76,9 @@ def collate_fn(batch, max_length):
 
     def pad_wave(wave, max_length):
         """pad all waveforms to the max_length"""
+        if max_length == None:
+            return wave
+
         C, T = wave.shape
         pad_amount = max_length - T
         wave = (
@@ -83,7 +86,7 @@ def collate_fn(batch, max_length):
             if pad_amount > 0
             else wave
         )
-        return wave[:max_length]
+        return wave[:, :max_length]
 
     # (B, C, T)
     raw_waves = torch.stack([pad_wave(w, max_length) for w in raw_waves])

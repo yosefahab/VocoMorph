@@ -63,6 +63,7 @@ class Checkpointer:
             checkpoint_path = os.path.join(
                 self.checkpoint_dir, f"ckpt_epoch_{epoch}.pt"
             )
+            logger.info(f"New checkpoint saved per save_interval (epoch: {epoch})")
             self._save_to_disk(checkpoint_path, epoch)
 
             # remove old checkpoints if keep_last_n is set
@@ -95,6 +96,7 @@ class Checkpointer:
         )
 
         if self.keep_last_n and len(checkpoint_files) > self.keep_last_n:
+            logger.info("Cleaning up old checkpoints per keep_last_n")
             to_remove = checkpoint_files[: len(checkpoint_files) - self.keep_last_n]
             for old_checkpoint in to_remove:
                 os.remove(old_checkpoint)

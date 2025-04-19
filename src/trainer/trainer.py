@@ -244,16 +244,19 @@ class ModelTrainer:
         for epoch in range(start_epoch, max_epochs):
             try:
                 logger.info(f"Epoch {epoch}/{max_epochs}")
+                train_metrics = self.train_one_epoch(train_loader)
+                val_metrics = self.evaluate(val_loader)
+
                 if epoch < self.start_scheduling:
                     logger.info(
                         f"Current epoch {epoch} < {self.start_scheduling}, skipping scheduling"
                     )
-                train_metrics = self.train_one_epoch(train_loader)
-                val_metrics = self.evaluate(val_loader)
-
-                self.update_schedulers(
-                    step=False, epoch=True, val_loss=val_metrics["Loss"]
-                )
+                else:
+                    self.update_schedulers(
+                        step=False,
+                        epoch=True,
+                        val_loss=val_metrics["Loss"],
+                    )
 
                 # log metrics for the epoch
                 self.log_tensorboard_metrics(epoch, train_metrics, val_metrics)
@@ -267,7 +270,7 @@ class ModelTrainer:
         else:
             logger.info("Finished training")
             logger.info("=== Train results ===")
-            for k in train_metrics.keys() | val_metrics.keys():  # unique metric names
+            for k in train_metrics.keys() | val_metrics.keys():
                 train_val_str = f"{k}: Train={train_metrics.get(k, 'N/A'):.4f} | Val={val_metrics.get(k, 'N/A'):.4f}"
                 logger.info(train_val_str)
 
@@ -307,7 +310,7 @@ class ModelTrainer:
                     [criterion(logits, targets) for criterion in self.criterions]
                 ).sum()
 
-                running_loss += loss.item() * targets.size(0)
+                running_loss += loss.item() * targets.shape[0]
 
                 self.update_metrics(logits, targets)
 

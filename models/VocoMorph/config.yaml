@@ -12,21 +12,23 @@ config:
     pin_memory: true
     drop_last: true
 
-    channels: &var_channels 1 # mono/stereo
+    channels: 1 # mono/stereo
     sample_rate: &var_sample_rate 16_000
     n_mels: &var_n_mels 80
     n_fft: &var_n_fft 512
     win_length: &var_win_length 512
     hop_length: &var_hop_length 128
 
-    frame_length: &var_frame_length 256 # the chunk of audio the model processes at a time
-    max_length: 160_000 # 10 sec at 16k sr
+    # the chunk of audio the model processes at a time
+    frame_length: &var_frame_length 800 # 50ms at 16k
+    # max audio length during training
+    max_length: 160_000 # 10 sec at 16k sr, -1 if you dont want to trim
 
     dataset: "timit"
 
     metadata_dir: "data/metadata"
 
-    batch_size: 1
+    batch_size: 16
     effects:
       &var_modulation_effects [
         "identity_transform",
@@ -40,19 +42,19 @@ config:
       chunk_size: *var_frame_length
       overlap: 0
   
-      module_condition_encoder:
+      module_stft:
+        output_length: *var_frame_length
+        n_fft: *var_n_fft
+        hop_length: *var_hop_length
+        win_length: *var_win_length
+
+      module_effect_encoder:
         effects: *var_modulation_effects
         embedding_dim: &var_embedding_dim 64
-  
-      module_tcn:
-        input_channels: *var_channels
-        input_length: *var_frame_length
-        hidden_channels: 64
+
+      module_film:
         embedding_dim: *var_embedding_dim
-        output_channels: *var_channels
-        output_length: *var_frame_length
-        kernel_size: 5
-        num_layers: 8
+        n_fft: *var_n_fft
   # ------------------------------------------------------------ #
   # loss functions
   criterion:

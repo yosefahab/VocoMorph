@@ -87,11 +87,7 @@ def _augment_wav(args: Tuple[pd.Series, int, str, List[str]]):
     row, sr, output_dir, effects = args
     raw_wav_path = str(row["raw_wav_path"])
 
-    try:
-        raw_wave, _ = load_audio(raw_wav_path, sr)
-    except Exception as e:
-        logger.error(f"Error loading audio file {raw_wav_path}: {e}")
-        return []
+    raw_wave, _ = load_audio(raw_wav_path, sr)
 
     raw_filename = os.path.splitext(os.path.basename(raw_wav_path))[0]
     modulated_waves = apply_effects(raw_wave, sr, effects)
@@ -136,7 +132,9 @@ def augment_files(
 
     os.makedirs(output_dir, exist_ok=True)
 
-    def generate_augmentation_args(df: pd.DataFrame, sr: int, output_dir: str, effects: List[str]):
+    def generate_augmentation_args(
+        df: pd.DataFrame, sr: int, output_dir: str, effects: List[str]
+    ):
         """Generates arguments for _augment_wav on demand."""
         for _, row in df.iterrows():
             yield (row, sr, output_dir, effects)
