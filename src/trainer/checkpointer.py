@@ -63,7 +63,9 @@ class Checkpointer:
             checkpoint_path = os.path.join(
                 self.checkpoint_dir, f"ckpt_epoch_{epoch}.pt"
             )
-            logger.info(f"New checkpoint saved per save_interval (epoch: {epoch})")
+            logger.info(
+                f"New checkpoint saved per save_interval: {self.save_interval})"
+            )
             self._save_to_disk(checkpoint_path, epoch)
 
             # remove old checkpoints if keep_last_n is set

@@ -10,7 +10,7 @@ config:
     pin_memory: true
     drop_last: true
 
-    channels: &var_channels 1 # mono/stereo
+    channels: 1 # mono/stereo
     sample_rate: &var_sample_rate 16_000
     n_mels: &var_n_mels 80
     n_fft: &var_n_fft 512
@@ -25,7 +25,7 @@ config:
 
     metadata_dir: "data/metadata"
 
-    batch_size: 1
+    batch_size: 16
     effects:
       &var_modulation_effects [
         "identity_transform",
@@ -43,6 +43,7 @@ config:
         n_fft: *var_n_fft
         hop_length: *var_hop_length
         win_length: *var_win_length
+        output_length: *var_frame_length
 
       module_effect_encoder:
         effects: *var_modulation_effects
@@ -57,9 +58,9 @@ config:
   # loss functions
   criterion:
     name: [
-        "L1Loss",
+        # "L1Loss",
         # "MSELoss",
-        # "STFTLoss",
+        "STFTLoss",
         # "MultiResolutionSTFTLoss",
         # "VocalModulationLoss",
       ]
@@ -104,7 +105,6 @@ config:
       lr: 1.0e-3
       weight_decay: 1.0e-4
   # ------------------------------------------------------------ #
-  # LR scheduler
   scheduler:
     name: ["ReduceLROnPlateau", "WarmupConstantSchedule"]
     ReduceLROnPlateau:
@@ -115,7 +115,6 @@ config:
     WarmupConstantSchedule:
       warmup_steps: 1000
     # ------------------------------------------------------------ #
-  # metrics to evaluate the model on
   metrics:
     name: []
   # ------------------------------------------------------------ #
@@ -126,7 +125,7 @@ config:
     start_scheduling: 50
     test_epochs: [20, 50, 100]
     precision: "fp16"
-
+  # ------------------------------------------------------------ #
   checkpointer:
     save_interval: 5 # num epochs to save checkpoint
     save_best: true

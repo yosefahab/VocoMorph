@@ -70,16 +70,17 @@ class ModelTrainer:
         summary(self.model, device=device)
 
     def log_tensorboard_metrics(
-        self, epoch: int, train_metrics: dict, val_metrics: dict
+        self,
+        epoch: int,
+        train_metrics: dict,
+        val_metrics: dict,
     ):
         for k in train_metrics.keys() | val_metrics.keys():
-            self.tensorboard_writer.add_scalars(
-                f"{k}/Epoch",
-                {
-                    "Train": train_metrics.get(k, None),
-                    "Val": val_metrics.get(k, None),
-                },
-                epoch,
+            self.tensorboard_writer.add_scalar(
+                f"{k}/Train", train_metrics.get(k, None), epoch
+            )
+            self.tensorboard_writer.add_scalar(
+                f"{k}/Val", val_metrics.get(k, None), epoch
             )
 
         self.tensorboard_writer.flush()
@@ -236,7 +237,7 @@ class ModelTrainer:
         start_epoch = self.checkpointer.load_checkpoint()
         # log training info
         logger.info(
-            f"Starting training from epoch: {start_epoch} for {max_epochs} max epochs"
+            f"Starting training from epoch: {start_epoch} for {max_epochs} max epochs."
         )
 
         train_metrics = {}
@@ -285,6 +286,7 @@ class ModelTrainer:
         Returns:
         - Evaluation metrics. Check compute_metrics() for more details.
         """
+        logger.info("Evaluating model")
         self.model.eval()
         with torch.no_grad():
             running_loss = 0.0
@@ -325,7 +327,7 @@ class ModelTrainer:
         Args:
             test_loader: test DataLoader.
         """
-        logger.info("Evaluating model")
+        logger.info("Testing model")
 
         if output_wav_dir is not None:
             os.makedirs(output_wav_dir, exist_ok=True)

@@ -6,7 +6,7 @@ from .modules.rnn_film import RNNFiLM
 from .modules.effect_encoder import EffectEncoder
 
 
-class VocoMorph(nn.Module):
+class VocoMorphRnn(nn.Module):
     def __init__(self, config: dict):
         super().__init__()
         self.chunk_size = config["chunk_size"]
@@ -30,15 +30,15 @@ class VocoMorph(nn.Module):
             # (B, C, chunk_size)
             chunk = audio[:, :, i : i + self.chunk_size]
 
-            # pad chunk
-            if chunk.shape[-1] < self.chunk_size:
-                pad_len = self.chunk_size - chunk.shape[-1]
-                chunk = torch.nn.functional.pad(chunk, (0, pad_len))
+            assert (
+                chunk.shape[-1] == self.chunk_size
+            ), f"Unexpected chunk size: {chunk.shape[-1]}"
 
             chunk_stft = self.stft.stft(chunk)
             magnitude = torch.abs(chunk_stft)
 
             modulated_mag = self.film(magnitude, embedding)
+            assert modulated_mag.shape == magnitude.shape
 
             # reconstruct complex STFT using original phase
             phase = torch.angle(chunk_stft)
@@ -52,3 +52,4 @@ class VocoMorph(nn.Module):
             output[:, :, i : i + self.chunk_size] += chunk_audio[
                 :, :, : min(chunk_audio.shape[-1], output.shape[-1] - i)
             ]
+        return output

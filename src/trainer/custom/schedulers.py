@@ -1,6 +1,7 @@
-import torch
 from dataclasses import dataclass, field, fields
 from typing import Callable
+from functools import partial
+import torch
 
 
 @dataclass(slots=False)
@@ -18,7 +19,7 @@ class WarmupConstantSchedule(torch.optim.lr_scheduler.LambdaLR):
         return 1.0
 
     def __post_init__(self):
-        self.lr_lambda = lambda step: self._lr_lambda(step, self.warmup_steps)
+        self.lr_lambda = partial(self._lr_lambda, warmup_steps=self.warmup_steps)
         super().__init__(self.optimizer, self.lr_lambda, last_epoch=self.last_epoch)
 
     def __repr__(self):
@@ -27,7 +28,5 @@ class WarmupConstantSchedule(torch.optim.lr_scheduler.LambdaLR):
         field_strs = [
             f"{field.name}={getattr(self, field.name)!r}" for field in init_fields
         ]
-        lr_lambda_repr = (
-            f"lr_lambda = <function WarmupConstantSchedule._lr_lambda at ...>"
-        )
+        lr_lambda_repr = f"lr_lambda = partial(<function WarmupConstantSchedule._lr_lambda at ...>, warmup_steps={self.warmup_steps})"
         return f"<{class_name}({', '.join(field_strs + [lr_lambda_repr])})>"
