@@ -122,21 +122,23 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
 
     collate_fn_partial = partial(collate_fn, max_length=config["max_length"])
     dataloaders = {}
+    PROJECT_ROOT = os.environ["PROJECT_ROOT"]
     for split in splits:
         datalist_filepath = os.path.join(
-            os.environ["PROJECT_ROOT"],
-            "data",
-            "metadata",
-            f"{dataset_name}_{split}.csv",
+            PROJECT_ROOT, config["datalists"][split]["path"]
         )
-        logger.info(f"Loading data from {datalist_filepath}")
-        num_workers = min(config["num_workers"], cpu_count() - 2)
+        assert os.path.exists(
+            datalist_filepath
+        ), f"Datalist for split {split} doesn't exist: {datalist_filepath}"
+        logger.info(f"Loading {split} data from {datalist_filepath}")
+        num_workers = min(config["num_workers"], max(0, cpu_count() - 2))
         logger.info(f"Using {num_workers} workers for DataLoaders")
         dataset = VocoMorphDataset(config, datalist_filepath=datalist_filepath)
         logger.info(f"Creating dataloader for split: {split}")
+        split_batch_size = config["datalists"][split]["batch_size"]
         dataloader = DataLoader(
             dataset=dataset,
-            batch_size=1 if split == "test" else config["batch_size"],
+            batch_size=split_batch_size,
             shuffle=(split == "train"),
             pin_memory=config["pin_memory"],
             num_workers=num_workers,

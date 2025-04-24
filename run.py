@@ -100,5 +100,5 @@ if __name__ == "__main__":
 
     if args.mode:
         # import and run main function from trainer
-        module = import_module("src.trainer.main")
+        module = import_module("src.main")
         module.main(args, config)

@@ -8,11 +8,11 @@ config:
   seed: 13
 
   data:
-    num_workers: 6
+    num_workers: 1
     pin_memory: true
     drop_last: true
 
-    channels: 1 # mono/stereo
+    channels: &var_num_channels 1 # mono/stereo
     sample_rate: &var_sample_rate 16_000
     n_mels: &var_n_mels 80
     n_fft: &var_n_fft 512
@@ -25,10 +25,17 @@ config:
     max_length: 160_000 # 10 sec at 16k sr, -1 if you dont want to trim
 
     dataset: "timit"
+    datalists:
+      train:
+        batch_size: 16
+        path: "data/metadata/timit_train.csv"
+      valid:
+        batch_size: 16
+        path: "data/metadata/timit_valid.csv"
+      test: 
+        batch_size: 1
+        path: "data/metadata/timit_test.csv"
 
-    metadata_dir: "data/metadata"
-
-    batch_size: 16
     effects:
       &var_modulation_effects [
         "identity_transform",
@@ -39,8 +46,10 @@ config:
       ]
   # ------------------------------------------------------------ #
   model:
+      num_channels: *var_num_channels
       chunk_size: *var_frame_length
       overlap: 0
+      num_blocks: 1
   
       module_stft:
         output_length: *var_frame_length
@@ -52,9 +61,14 @@ config:
         effects: *var_modulation_effects
         embedding_dim: &var_embedding_dim 64
 
+      module_subnet:
+        input_channels: *var_num_channels
+        hidden_channels: 128
+        kernel_size: [3,3]
+
       module_film:
-        embedding_dim: *var_embedding_dim
-        n_fft: *var_n_fft
+        input_dim: *var_embedding_dim
+        output_dim: 257
   # ------------------------------------------------------------ #
   # loss functions
   criterion:
