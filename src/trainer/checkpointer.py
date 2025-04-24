@@ -104,7 +104,9 @@ class Checkpointer:
                 os.remove(old_checkpoint)
                 logger.info(f"Removed old checkpoint: {old_checkpoint}")
 
-    def load_checkpoint(self, checkpoint_path: Optional[str] = None) -> int:
+    def load_checkpoint(
+        self, device: torch.device, checkpoint_path: Optional[str] = None
+    ) -> int:
         """
         Loads a checkpoint (latest if no path is specified).
 
@@ -120,11 +122,7 @@ class Checkpointer:
                 return 1
 
         logger.info(f"Loading checkpoint from {checkpoint_path}")
-        checkpoint = torch.load(
-            checkpoint_path,
-            map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-        )
-
+        checkpoint = torch.load(checkpoint_path, map_location=device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
 
         if "optimizer_state_dicts" in checkpoint:

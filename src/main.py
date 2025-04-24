@@ -2,9 +2,9 @@ import os
 from argparse import Namespace
 
 from models.factory import create_model_instance
-from src.dataset.dataset import get_dataloaders
-from src.utils import get_device, set_seed
-from .trainer import ModelTrainer
+from .dataset.dataset import get_dataloaders
+from .utils import get_device, set_seed
+from .trainer.trainer import ModelTrainer
 
 
 def main(args: Namespace, config: dict):
@@ -17,7 +17,7 @@ def main(args: Namespace, config: dict):
 
     if args.mode == "train":
         set_seed(config["seed"])
-        loaders = get_dataloaders(["train", "valid", "test"], config["data"])
+        loaders = get_dataloaders(["train", "valid"], config["data"])
         epochs = config["trainer"]["max_epoch"]
         trainer.train(epochs, loaders["train"], loaders["valid"])
     elif args.mode == "test":
@@ -25,7 +25,6 @@ def main(args: Namespace, config: dict):
         trainer.test(loaders["test"], args.out_wav_dir)
     elif args.mode == "infer_sample":
         # TODO: implement infer_sample mode
-        pass
         pass
     else:
         # TODO: live inference

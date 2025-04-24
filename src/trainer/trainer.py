@@ -13,7 +13,7 @@ from torch.amp.grad_scaler import GradScaler
 from torchinfo import summary
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
-
+from torch.nn.utils import clip_grad_norm_
 from src.logging.logger import get_logger
 from src.utils import save_audio
 from .checkpointer import Checkpointer
@@ -41,6 +41,7 @@ class ModelTrainer:
         self.model = model
         self.model.to(self.device)
 
+        self.clip_norm = self.config["trainer"]["clip_norm"]
         self.criterions = get_criterions(self.config["criterion"])
         self.optimizers = get_optimizers(self.config["optimizer"], model.parameters())
         self.schedulers = get_schedulers(self.config["scheduler"], self.optimizers)
@@ -76,11 +77,13 @@ class ModelTrainer:
         val_metrics: dict,
     ):
         for k in train_metrics.keys() | val_metrics.keys():
-            self.tensorboard_writer.add_scalar(
-                f"{k}/Train", train_metrics.get(k, None), epoch
-            )
-            self.tensorboard_writer.add_scalar(
-                f"{k}/Val", val_metrics.get(k, None), epoch
+            self.tensorboard_writer.add_scalars(
+                k,
+                {
+                    "Train": train_metrics.get(k, None),
+                    "Val": val_metrics.get(k, None),
+                },
+                epoch,
             )
 
         self.tensorboard_writer.flush()
@@ -195,11 +198,21 @@ class ModelTrainer:
             if self.scaler:
                 self.scaler.scale(loss).backward()
                 for optimizer in self.optimizers:
+                    if self.clip_norm:
+                        self.scaler.unscale_(optimizer)
+                        clip_grad_norm_(
+                            self.model.parameters(), max_norm=self.clip_norm
+                        )
+
                     self.scaler.step(optimizer)
                 self.scaler.update()
             else:
                 loss.backward()
                 for optimizer in self.optimizers:
+                    if self.clip_norm:
+                        clip_grad_norm_(
+                            self.model.parameters(), max_norm=self.clip_norm
+                        )
                     optimizer.step()
 
             # accumulate loss
@@ -234,7 +247,7 @@ class ModelTrainer:
         self.tensorboard_writer = SummaryWriter(log_dir=self.logs_dir)
 
         # load last checkpoint (or start from scratch if 1)
-        start_epoch = self.checkpointer.load_checkpoint()
+        start_epoch = self.checkpointer.load_checkpoint(self.device)
         # log training info
         logger.info(
             f"Starting training from epoch: {start_epoch} for {max_epochs} max epochs."

@@ -4,6 +4,7 @@ import torch.nn as nn
 from .modules.stft import STFT
 from .modules.film import FiLM
 from .modules.effect_encoder import EffectEncoder
+from .modules.magnitude_encoder import SubNet
 
 
 class VocoMorph(nn.Module):
@@ -11,41 +12,66 @@ class VocoMorph(nn.Module):
         super().__init__()
         self.chunk_size = config["chunk_size"]
         self.overlap = config["overlap"]
+        self.stride = self.chunk_size - self.overlap
 
         self.effect_encoder = EffectEncoder(config["module_effect_encoder"])
         self.stft = STFT(config["module_stft"])
+        self.residual_blocks = nn.Sequential(
+            *[SubNet(config["module_subnet"]) for _ in range(config["num_blocks"])]
+        )
         self.film = FiLM(config["module_film"])
+        self.activation = nn.ReLU()
+        self.normalization = nn.BatchNorm2d(config["num_channels"])
 
     def forward(self, x):
         effect_id, audio = x
-        # audio shape: (B, C, T)
-        T = audio.shape[-1]
+        B, C, T = audio.shape
 
+        # convert effect id to embedding
         embedding = self.effect_encoder(effect_id)
 
         output = torch.zeros_like(audio)
-        stride = self.chunk_size - self.overlap
 
-        for i in range(0, T, stride):
-            # (B, C, chunk_size)
-            chunk = audio[:, :, i : i + self.chunk_size]
-            assert (
-                chunk.shape[-1] == self.chunk_size
-            ), f"Unexpected chunk size: {chunk.shape[-1]}"
+        # pre-compute scale & shift once
+        scale, shift = self.film(embedding)
+        # repeat across F, TT
+        scale = scale.view(B, C, -1, 1)
+        shift = shift.view(B, C, -1, 1)
 
+        for i in range(0, T, self.stride):
+            end_idx = min(T, i + self.chunk_size)
+            chunk = audio[:, :, i:end_idx]
+
+            # pad if needed
+            if chunk.shape[-1] < self.chunk_size:
+                pad = self.chunk_size - chunk.shape[-1]
+                chunk = nn.functional.pad(chunk, (0, pad))
+
+            # convert audio to spectrogram
             chunk_stft = self.stft.stft(chunk)
+
+            # non linear transformations + film
             magnitude = torch.abs(chunk_stft)
 
-            modulated_mag = self.film(magnitude, embedding)
+            # residual blocks
+            for r in self.residual_blocks:
+                residual = magnitude
+                magnitude = r(magnitude)
+                magnitude = self.normalization(magnitude)
+                # apply film
+                magnitude = magnitude * scale + shift
+                # activate with residual
+                magnitude = self.activation(magnitude + residual)
 
-            # reconstruct complex STFT using original phase
+            # reconstruct audio using modulated magnitude & original phase
             phase = torch.angle(chunk_stft)
-            real = modulated_mag * torch.cos(phase)
-            imag = modulated_mag * torch.sin(phase)
+            real = magnitude * torch.cos(phase)
+            imag = magnitude * torch.sin(phase)
             modulated_complex = torch.complex(real, imag)
 
+            # convert spectrogram back into audio
             chunk_audio = self.stft.istft(modulated_complex)
+
             # overlap add
-            end_idx = min(T, i + self.chunk_size)
             output[:, :, i:end_idx] += chunk_audio[:, :, : end_idx - i]
         return output

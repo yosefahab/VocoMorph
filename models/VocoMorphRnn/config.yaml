@@ -23,9 +23,17 @@ config:
 
     dataset: "timit"
 
-    metadata_dir: "data/metadata"
+    datalists:
+      train:
+        batch_size: 16
+        path: "data/metatadata/train/timit_train.csv"
+      valid:
+        batch_size: 16
+        path: "data/metatadata/train/timit_valid.csv"
+      test: 
+        batch_size: 16
+        path: "data/metatadata/train/timit_test.csv"
 
-    batch_size: 16
     effects:
       &var_modulation_effects [
         "identity_transform",
