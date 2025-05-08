@@ -77,11 +77,13 @@ class ModelTrainer:
         val_metrics: dict,
     ):
         for k in train_metrics.keys() | val_metrics.keys():
-            self.tensorboard_writer.add_scalar(
-                f"{k}/Train", train_metrics.get(k, None), epoch
-            )
-            self.tensorboard_writer.add_scalar(
-                f"{k}/Val", val_metrics.get(k, None), epoch
+            self.tensorboard_writer.add_scalars(
+                k,
+                {
+                    "Train": train_metrics.get(k, None),
+                    "Val": val_metrics.get(k, None),
+                },
+                epoch,
             )
 
         self.tensorboard_writer.flush()
@@ -245,7 +247,7 @@ class ModelTrainer:
         self.tensorboard_writer = SummaryWriter(log_dir=self.logs_dir)
 
         # load last checkpoint (or start from scratch if 1)
-        start_epoch = self.checkpointer.load_checkpoint()
+        start_epoch = self.checkpointer.load_checkpoint(self.device)
         # log training info
         logger.info(
             f"Starting training from epoch: {start_epoch} for {max_epochs} max epochs."

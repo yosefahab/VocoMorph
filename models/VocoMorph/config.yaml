@@ -25,6 +25,7 @@ config:
     max_length: 160_000 # 10 sec at 16k sr, -1 if you dont want to trim
 
     dataset: "timit"
+
     datalists:
       train:
         batch_size: 16
@@ -73,10 +74,8 @@ config:
   # loss functions
   criterion:
     name: [
-        # "L1Loss",
-        # "MSELoss",
-        "STFTLoss",
-        # "MultiResolutionSTFTLoss",
+        # "STFTLoss",
+        "MultiResolutionSTFTLoss",
         # "VocalModulationLoss",
       ]
     STFTLoss:

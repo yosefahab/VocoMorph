@@ -5,6 +5,7 @@ from .modules.stft import STFT
 from .modules.film import FiLM
 from .modules.magnitude_encoder import SubNet
 from .modules.effect_encoder import EffectEncoder
+from .modules.magnitude_encoder import SubNet
 
 
 class VocoMorph(nn.Module):
