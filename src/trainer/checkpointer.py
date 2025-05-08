@@ -123,6 +123,7 @@ class Checkpointer:
         checkpoint = torch.load(
             checkpoint_path,
             map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+            weights_only=False,
         )
 
         self.model.load_state_dict(checkpoint["model_state_dict"])

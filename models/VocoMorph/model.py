@@ -3,8 +3,8 @@ import torch.nn as nn
 
 from .modules.stft import STFT
 from .modules.film import FiLM
-from .modules.effect_encoder import EffectEncoder
 from .modules.magnitude_encoder import SubNet
+from .modules.effect_encoder import EffectEncoder
 
 
 class VocoMorph(nn.Module):
@@ -30,14 +30,13 @@ class VocoMorph(nn.Module):
         # convert effect id to embedding
         embedding = self.effect_encoder(effect_id)
 
-        output = torch.zeros_like(audio)
-
         # pre-compute scale & shift once
         scale, shift = self.film(embedding)
         # repeat across F, TT
         scale = scale.view(B, C, -1, 1)
         shift = shift.view(B, C, -1, 1)
 
+        output = torch.zeros_like(audio)
         for i in range(0, T, self.stride):
             end_idx = min(T, i + self.chunk_size)
             chunk = audio[:, :, i:end_idx]
@@ -50,13 +49,15 @@ class VocoMorph(nn.Module):
             # convert audio to spectrogram
             chunk_stft = self.stft.stft(chunk)
 
-            # non linear transformations + film
+            # get the magnitude component
             magnitude = torch.abs(chunk_stft)
+            # get the phase component
+            phase = torch.angle(chunk_stft)
 
             # residual blocks
-            for r in self.residual_blocks:
+            for rb in self.residual_blocks:
                 residual = magnitude
-                magnitude = r(magnitude)
+                magnitude = rb(magnitude)
                 magnitude = self.normalization(magnitude)
                 # apply film
                 magnitude = magnitude * scale + shift
@@ -64,7 +65,6 @@ class VocoMorph(nn.Module):
                 magnitude = self.activation(magnitude + residual)
 
             # reconstruct audio using modulated magnitude & original phase
-            phase = torch.angle(chunk_stft)
             real = magnitude * torch.cos(phase)
             imag = magnitude * torch.sin(phase)
             modulated_complex = torch.complex(real, imag)

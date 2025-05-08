@@ -67,8 +67,8 @@ class ModelTrainer:
         )
 
         logger.info("=== Model summary ===")
-
-        summary(self.model, device=device)
+        with open(os.path.join(self.model_dir, "model_summary.txt"), "w") as f:
+            f.write(str(summary(self.model, device=device)))
 
     def log_tensorboard_metrics(
         self,
