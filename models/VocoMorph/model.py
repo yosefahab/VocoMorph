@@ -17,12 +17,12 @@ class VocoMorph(nn.Module):
 
         self.effect_encoder = EffectEncoder(config["module_effect_encoder"])
         self.stft = STFT(config["module_stft"])
-        self.residual_blocks = nn.Sequential(
-            *[SubNet(config["module_subnet"]) for _ in range(config["num_blocks"])]
+        self.residual_blocks = nn.ModuleList(
+            [SubNet(config["module_subnet"]) for _ in range(config["num_blocks"])]
         )
+
         self.film = FiLM(config["module_film"])
         self.activation = nn.ReLU()
-        self.normalization = nn.BatchNorm2d(config["num_channels"])
 
     def forward(self, x):
         effect_id, audio = x
@@ -59,7 +59,6 @@ class VocoMorph(nn.Module):
             for rb in self.residual_blocks:
                 residual = magnitude
                 magnitude = rb(magnitude)
-                magnitude = self.normalization(magnitude)
                 # apply film
                 magnitude = magnitude * scale + shift
                 # activate with residual

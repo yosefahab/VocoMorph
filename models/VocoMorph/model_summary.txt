@@ -5,18 +5,23 @@ VocoMorph                                --
 ├─EffectEncoder: 1-1                     --
 │    └─Embedding: 2-1                    320
 ├─STFT: 1-2                              --
-├─Sequential: 1-3                        --
+├─ModuleList: 1-3                        --
 │    └─SubNet: 2-2                       --
 │    │    └─Conv2d: 3-1                  1,280
 │    │    └─ReLU: 3-2                    --
 │    │    └─Conv2d: 3-3                  1,153
+│    │    └─BatchNorm2d: 3-4             2
+│    └─SubNet: 2-3                       --
+│    │    └─Conv2d: 3-5                  1,280
+│    │    └─ReLU: 3-6                    --
+│    │    └─Conv2d: 3-7                  1,153
+│    │    └─BatchNorm2d: 3-8             2
 ├─FiLM: 1-4                              --
-│    └─Linear: 2-3                       16,705
 │    └─Linear: 2-4                       16,705
+│    └─Linear: 2-5                       16,705
 ├─ReLU: 1-5                              --
-├─BatchNorm2d: 1-6                       2
 =================================================================
-Total params: 36,165
-Trainable params: 36,165
+Total params: 38,600
+Trainable params: 38,600
 Non-trainable params: 0
 =================================================================

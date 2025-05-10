@@ -21,11 +21,13 @@ class SubNet(nn.Module):
             in_channels=self.hidden_channels,
             out_channels=self.input_channels,
             kernel_size=self.kernel_size,
-            padding="same",
+            padding=self.padding,
         )
+        self.norm = nn.BatchNorm2d(self.input_channels)
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.relu(x)
         x = self.conv2(x)
+        x = self.norm(x)
         return x
