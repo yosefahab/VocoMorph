@@ -1,4 +1,4 @@
-experiment: "VocoMorphBase"
+experiment: "VocoMorphUnet"
 notes: "Neural Vocal Modulator V1.\
    TCN (Temporal Convolutional Network) backbone & FiLM (Feature-wise Linear Modulation)\
    layers are used to condition an audio on an Embedding Vector"

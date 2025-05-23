@@ -1,9 +1,9 @@
 import os
-from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from multiprocessing import Pool
+from typing import List, Optional, Tuple
 
 from src.logging.logger import get_logger
 from src.utils import load_audio, save_audio
@@ -58,7 +58,7 @@ def split_dataset_csv(
         shuffle: whether to shuffle the rows before splitting.
     """
     logger.info(f"Splitting {input_csv} into {split_ratio}")
-    df = pd.read_csv(input_csv)
+    df = pd.read_csv(input_csv, dtype={"ID": str})
     if shuffle:
         df = df.sample(frac=1).reset_index(drop=True)
 
@@ -77,7 +77,7 @@ def split_dataset_csv(
 
 def apply_effects(audio: np.ndarray, sr: int, effects: List[str]):
     """
-    Placeholder: Apply audio effects.
+    Apply audio effects by name.
     """
     return call_functions_by_name(effects, audio=audio, sr=sr)
 
@@ -85,23 +85,23 @@ def apply_effects(audio: np.ndarray, sr: int, effects: List[str]):
 def _augment_wav(args: Tuple[pd.Series, int, str, List[str]]):
     """Helper function to process a single row for parallel execution."""
     row, sr, output_dir, effects = args
+    wav_id = str(row["ID"])
     raw_wav_path = str(row["raw_wav_path"])
 
     raw_wave, _ = load_audio(raw_wav_path, sr)
 
-    raw_filename = os.path.splitext(os.path.basename(raw_wav_path))[0]
     modulated_waves = apply_effects(raw_wave, sr, effects)
     processed_data = []
 
     for eid, modulated_wave in enumerate(modulated_waves):
-        mod_filename = f"{raw_filename}_e{eid}.wav"
+        mod_filename = f"{wav_id}_e{eid}.wav"
         mod_wav_path = os.path.join(output_dir, mod_filename)
         save_audio(modulated_wave, sr, mod_filename, output_dir)
         assert len(modulated_wave) == len(raw_wave)
 
         processed_data.append(
             {
-                "ID": row["ID"],
+                "ID": str(row["ID"]),
                 "effect_id": eid,
                 "raw_wav_path": raw_wav_path,
                 "modulated_wav_path": mod_wav_path,
