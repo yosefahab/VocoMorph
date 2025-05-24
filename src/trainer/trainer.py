@@ -340,8 +340,6 @@ class ModelTrainer:
         Args:
             test_loader: test DataLoader.
         """
-        logger.info("Testing model")
-
         if output_wav_dir is not None:
             os.makedirs(output_wav_dir, exist_ok=True)
             logger.info(f"Saving output waves to: {output_wav_dir}")
