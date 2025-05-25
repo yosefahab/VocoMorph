@@ -104,7 +104,9 @@ def save_audio(
 
     # convert to float32 if necessary
     if audio.dtype != np.float32:
-        logger.warning(f"Found audio {filename} dtype: {audio.dtype}, expected np.float32")
+        logger.warning(
+            f"Found audio {filename} dtype: {audio.dtype}, expected np.float32"
+        )
         audio = audio.astype(np.float32)
 
     # save the audio file
@@ -135,8 +137,11 @@ def load_audio(
     if audio.ndim == 1:
         audio = np.expand_dims(audio, axis=0)
 
-    # convert mono to stereo if requested
-    if channels == 2 and audio.shape[0] == 1:
+    if channels == 1 and audio.shape[0] == 2:
+        # Downmix stereo to mono
+        audio = np.mean(audio, axis=0, keepdims=True)
+    elif channels == 2 and audio.shape[0] == 1:
+        # convert mono to stereo if requested
         audio = np.vstack([audio, audio])
 
     return audio, int(sr_out)

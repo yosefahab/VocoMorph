@@ -51,14 +51,6 @@ def parse_args():
         default=None,
         help="Specify mode: 'train' (training), 'test' (evaluation), or 'infer_sample' (inference on a sample).",
     )
-
-    parser.add_argument(
-        "--sample-file",
-        type=str,
-        default=None,
-        help="Path to the sample audio file for inference.",
-    )
-
     parser.add_argument(
         "--out-wav-dir",
         type=str,
@@ -66,11 +58,26 @@ def parse_args():
         help="(Optional) directory to save output WAV files in test mode.",
     )
 
+    parser.add_argument(
+        "--sample-file",
+        type=str,
+        default=None,
+        help="Path to the sample audio file for inference.",
+    )
+    parser.add_argument(
+        "--checkpoint-path",
+        type=str,
+        default=None,
+        help="(Optional) checkpoint to use in inference mode.",
+    )
+
     args = parser.parse_args()
 
     if args.mode == "infer_sample" and args.sample_file is None:
         parser.error("--sample-file is required when --mode is set to 'infer_sample'.")
 
+    if args.mode == "infer_sample" and args.checkpoint_path is None:
+        parser.error("--sample-file is required when --mode is set to 'infer_sample'.")
     return args
 
 
@@ -90,13 +97,13 @@ if __name__ == "__main__":
         module = f"src.dataset.generate_dataset"
         module = import_module(module)
         module.main(args.generate_dataset, config["data"])
-        sys.exit(0)
+        exit(0)
 
     # validate arguments
     if args.run_tests:
         module = import_module("tests.main")
         module.main(config["data"])
-        sys.exit(0)
+        exit(0)
 
     if args.mode:
         # import and run main function from trainer

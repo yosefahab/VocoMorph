@@ -142,7 +142,7 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
             shuffle=(split == "train"),
             pin_memory=config["pin_memory"],
             num_workers=num_workers,
-            drop_last=config["drop_last"],
+            drop_last=config["drop_last"] if split == "train" else False,
             collate_fn=collate_fn_partial,
         )
         dataloaders[split] = dataloader

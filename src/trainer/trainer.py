@@ -86,6 +86,13 @@ class ModelTrainer:
                 epoch,
             )
 
+        for i, optimizer in enumerate(self.optimizers):
+            for j, param_group in enumerate(optimizer.param_groups):
+                self.tensorboard_writer.add_scalars(
+                    "LR",
+                    {f"optimizer_{i}_group_{j}": param_group["lr"]},
+                    epoch,
+                )
         self.tensorboard_writer.flush()
 
     def update_schedulers(
@@ -110,6 +117,7 @@ class ModelTrainer:
                     torch.optim.lr_scheduler.LambdaLR,
                     torch.optim.lr_scheduler.ExponentialLR,
                     torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
+                    torch.optim.lr_scheduler._LRScheduler,
                 ),
             ):
                 scheduler.step()  # update step-based schedulers

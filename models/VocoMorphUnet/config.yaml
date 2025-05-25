@@ -11,7 +11,7 @@ config:
   seed: 13
 
   data:
-    num_workers: 1
+    num_workers: 5
     pin_memory: true
     drop_last: true
 
@@ -76,10 +76,14 @@ config:
         "MultiResolutionSTFTLoss",
         # "VocalModulationLoss",
       ]
+
     STFTLoss:
+      alpha: 0.5
+      beta: 0.5
       n_fft: *var_n_fft
       hop_length: *var_hop_length
       win_length: *var_win_length
+
     MultiResolutionSTFTLoss:
       alpha: 0.5
       beta: 0.5
@@ -114,12 +118,12 @@ config:
   optimizer:
     name: ["AdamW"]
     AdamW:
-      lr: 1.0e-3
-      weight_decay: 1.0e-4
+      lr: 0.001 #1.0e-3
+      weight_decay: 0.0001 #1.0e-4
   # ------------------------------------------------------------ #
   # LR scheduler
   scheduler:
-    name: ["ReduceLROnPlateau", "WarmupConstantSchedule"]
+    name: ["ReduceLROnPlateau"]
     ReduceLROnPlateau:
       mode: "min"
       min_lr: 1.0e-10

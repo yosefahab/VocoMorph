@@ -1,3 +1,4 @@
+from torch import Tensor
 import importlib
 import librosa
 import numpy as np
@@ -9,6 +10,21 @@ from src.logging.logger import get_logger
 
 
 logger = get_logger(__name__)
+
+
+def plot_tensors(tensors: List[Tensor]):
+    n = len(tensors)
+    fig, axes = plt.subplots(nrows=n, figsize=(8, 3 * n))
+    if n == 1:
+        axes = [axes]
+    for i, t in enumerate(tensors):
+        if t.is_complex():
+            t = t.abs()
+        img = axes[i].imshow(t.squeeze().cpu(), origin="lower", aspect="auto")
+        axes[i].set(title=f"Tensor-{i}")
+        fig.colorbar(img, ax=axes[i])
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_waves(signals: List[Tuple[np.ndarray, float]]):
