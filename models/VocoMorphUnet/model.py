@@ -25,7 +25,7 @@ class VocoMorphUnet(nn.Module):
 
         assert len(encoder_filters) == len(
             decoder_filters
-        ), f"Number of Encoder and Decoder blocks must match"
+        ), "Number of Encoder and Decoder blocks must match"
 
         self.stft = STFT(config["module_stft"])
         self.effect_encoder = EffectEncoder(config["num_effects"], embedding_dim)

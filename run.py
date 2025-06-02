@@ -91,10 +91,10 @@ if __name__ == "__main__":
     config = yaml_dict["config"]
 
     if args.generate_dataset:
-        module = f"src.dataset.download_dataset"
+        module = "src.dataset.download_dataset"
         module = import_module(module)
         module.main(args.generate_dataset)
-        module = f"src.dataset.generate_dataset"
+        module = "src.dataset.generate_dataset"
         module = import_module(module)
         module.main(args.generate_dataset, config["data"])
         exit(0)

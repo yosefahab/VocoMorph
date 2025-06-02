@@ -76,7 +76,7 @@ def collate_fn(batch, max_length):
 
     def pad_wave(wave, max_length):
         """pad all waveforms to the max_length"""
-        if max_length == None:
+        if max_length is None:
             return wave
 
         C, T = wave.shape
@@ -127,9 +127,9 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
         datalist_filepath = os.path.join(
             PROJECT_ROOT, config["datalists"][split]["path"]
         )
-        assert os.path.exists(
-            datalist_filepath
-        ), f"Datalist for split {split} doesn't exist: {datalist_filepath}"
+        assert os.path.exists(datalist_filepath), (
+            f"Datalist for split {split} doesn't exist: {datalist_filepath}"
+        )
         logger.info(f"Loading {split} data from {datalist_filepath}")
         num_workers = min(config["num_workers"], max(0, cpu_count() - 2))
         logger.info(f"Using {num_workers} workers for DataLoaders")
