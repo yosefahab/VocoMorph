@@ -17,7 +17,7 @@ class Encoder(nn.Module):
         )
         self.film_layer = FiLM(out_channels, embedding_dim)
         self.pool = (
-            nn.MaxPool1d(kernel_size=2, stride=2) if apply_pool else nn.Identity()
+            nn.MaxPool2d(kernel_size=2, stride=2) if apply_pool else nn.Identity()
         )
 
     def forward(self, x, effect_embedding):

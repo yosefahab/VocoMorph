@@ -61,6 +61,13 @@ config:
       decoder_filters: [128, 64, 32]
       kernel_size: [3,3]
       padding: 1
+  
+      module_stft:
+        output_length: *var_frame_length
+        n_fft: *var_n_fft
+        hop_length: *var_hop_length
+        win_length: *var_win_length
+
   # ------------------------------------------------------------ #
   # loss functions
   criterion:
