@@ -26,8 +26,8 @@ class FiLM(nn.Module):
         beta = self.beta_generator(embedding)
 
         # reshape gamma and beta to (B, C, 1, 1) to enable broadcasting for element-wise multiplication/addition
-        gamma = gamma.unsqueeze(2).unsqueeze(3)
-        beta = beta.unsqueeze(2).unsqueeze(3)
+        gamma = gamma.unsqueeze(-1)
+        beta = beta.unsqueeze(-1)
 
         modulated_feature_map = gamma * feature_map + beta
         return modulated_feature_map

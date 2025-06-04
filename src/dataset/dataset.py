@@ -24,7 +24,7 @@ class VocoMorphDataset(Dataset):
         self.max_length = config["max_length"]
         self.datalist_filepath = datalist_filepath
 
-        self.df = pd.read_csv(datalist_filepath)
+        self.df = pd.read_csv(datalist_filepath).iloc[:100]
         self.n = len(self.df)
         logger.info(f"Dataset records = {self.n}")
 
@@ -136,6 +136,7 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
         dataset = VocoMorphDataset(config, datalist_filepath=datalist_filepath)
         logger.info(f"Creating dataloader for split: {split}")
         split_batch_size = config["datalists"][split]["batch_size"]
+        logger.info(f"Using {split_batch_size} batch size for split")
         dataloader = DataLoader(
             dataset=dataset,
             batch_size=split_batch_size,

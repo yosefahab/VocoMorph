@@ -11,7 +11,6 @@ from .trainer.trainer import ModelTrainer
 
 
 def main(args: Namespace, config: dict):
-
     model_dir = os.path.join(os.environ["PROJECT_ROOT"], "models", args.model_name)
     device = get_device(args.device)
 
@@ -34,7 +33,13 @@ def main(args: Namespace, config: dict):
             weights_only=False,
         )
         model.load_state_dict(checkpoint["model_state_dict"])
-        infer(2, args.sample_file, model, config)
+
+        output_filename = os.path.splitext(os.path.basename(args.sample_file))[0]
+        output_dir = os.path.join(
+            os.environ["PROJECT_ROOT"], "data", "output", output_filename
+        )
+        for i in range(len(config["data"]["effects"])):
+            infer(i, args.sample_file, model, config, output_path=output_dir)
     else:
         # TODO: live inference
         pass

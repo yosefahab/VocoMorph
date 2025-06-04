@@ -88,7 +88,9 @@ class VocoMorphUnet(nn.Module):
         for i in range(0, T, self.stride):
             end_idx = min(T, i + self.chunk_size)
             chunk = audio[:, :, i:end_idx]
-            assert len(chunk) % 2 ** len(self.encoder_blocks) == 0
+            assert chunk.shape[-1] % (2 ** len(self.encoder_blocks)) == 0, (
+                f"chunk length ({chunk.shape[-1]}) is not divisible by 2^n_levels ({len(self.encoder_blocks)})"
+            )
 
             chunk_audio = self.forward_one(chunk, effect_embedding)
 
@@ -122,7 +124,6 @@ class VocoMorphUnet(nn.Module):
             x = decoder(x, skip, effect_embedding)
 
         x = self.final_conv(x)
-        x = x[..., :T]
         assert x.shape == chunk.shape, (
             f"model input shape ({chunk.shape}) != output shape ({x.shape})"
         )

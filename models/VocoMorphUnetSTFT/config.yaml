@@ -70,7 +70,7 @@ config:
 
   # ------------------------------------------------------------ #
   # loss functions
-  criterion:
+  criterions:
     name: [
         # "STFTLoss",
         "MultiResolutionSTFTLoss",
@@ -115,14 +115,14 @@ config:
       hop_length: *var_hop_length
       win_length: *var_win_length
   # ------------------------------------------------------------ #
-  optimizer:
+  optimizers:
     name: ["AdamW"]
     AdamW:
       lr: 0.001 #1.0e-3
       weight_decay: 0.0001 #1.0e-4
   # ------------------------------------------------------------ #
   # LR scheduler
-  scheduler:
+  schedulers:
     name: ["ReduceLROnPlateau"]
     ReduceLROnPlateau:
       mode: "min"

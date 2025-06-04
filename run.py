@@ -73,11 +73,13 @@ def parse_args():
 
     args = parser.parse_args()
 
-    if args.mode == "infer_sample" and args.sample_file is None:
+    if args.mode == "infer_sample" and (args.sample_file is None):
         parser.error("--sample-file is required when --mode is set to 'infer_sample'.")
 
-    if args.mode == "infer_sample" and args.checkpoint_path is None:
-        parser.error("--sample-file is required when --mode is set to 'infer_sample'.")
+    if args.mode == "infer_sample" and (args.checkpoint_path is None):
+        parser.error(
+            "--checkpoint-path is required when --mode is set to 'infer_sample'."
+        )
     return args
 
 

@@ -72,7 +72,7 @@ config:
         output_dim: 257
   # ------------------------------------------------------------ #
   # loss functions
-  criterion:
+  criterions:
     name: [
         # "STFTLoss",
         "MultiResolutionSTFTLoss",
@@ -113,14 +113,14 @@ config:
       hop_length: *var_hop_length
       win_length: *var_win_length
   # ------------------------------------------------------------ #
-  optimizer:
+  optimizers:
     name: ["AdamW"]
     AdamW:
       lr: 1.0e-3
       weight_decay: 1.0e-4
   # ------------------------------------------------------------ #
   # LR scheduler
-  scheduler:
+  schedulers:
     name: ["ReduceLROnPlateau", "WarmupConstantSchedule"]
     ReduceLROnPlateau:
       mode: "min"

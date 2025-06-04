@@ -34,17 +34,17 @@ class ModelTrainer:
     ):
         self.config = config
         self.model_dir = model_dir
-        assert os.path.exists(
-            self.model_dir
-        ), f"Model directory {self.model_dir} does not exist."
+        assert os.path.exists(self.model_dir), (
+            f"Model directory {self.model_dir} does not exist."
+        )
         self.device = device
         self.model = model
         self.model.to(self.device)
 
         self.clip_norm = self.config["trainer"]["clip_norm"]
-        self.criterions = get_criterions(self.config["criterion"])
-        self.optimizers = get_optimizers(self.config["optimizer"], model.parameters())
-        self.schedulers = get_schedulers(self.config["scheduler"], self.optimizers)
+        self.criterions = get_criterions(self.config["criterions"])
+        self.optimizers = get_optimizers(self.config["optimizers"], model.parameters())
+        self.schedulers = get_schedulers(self.config["schedulers"], self.optimizers)
         self.start_scheduling = config["trainer"]["start_scheduling"]
 
         self.scaler = None
@@ -76,6 +76,7 @@ class ModelTrainer:
         train_metrics: dict,
         val_metrics: dict,
     ):
+        logger.info("Logging metrics to tensorboard")
         for k in train_metrics.keys() | val_metrics.keys():
             self.tensorboard_writer.add_scalars(
                 k,
@@ -193,7 +194,7 @@ class ModelTrainer:
             for optimizer in self.optimizers:
                 optimizer.zero_grad()
 
-            with amp.autocast(  # pyright: ignore
+            with amp.autocast(
                 device_type=self.device.type, enabled=self.scaler is not None
             ):
                 logits = self.model(inputs)
@@ -299,7 +300,7 @@ class ModelTrainer:
         self.close_writer()
 
     def evaluate(
-        self, data_loader: DataLoader, output_wav_dir: Optional[str] = None
+        self, data_loader: DataLoader, output_dir: Optional[str] = None
     ) -> dict:
         """
         Args:
@@ -323,10 +324,8 @@ class ModelTrainer:
                 inputs = (eid, inputs)
                 logits = self.model(inputs)
 
-                # fmt: off
-                if output_wav_dir is not None:
-                    save_audio(logits, data_loader.dataset.fs, id, output_wav_dir)  # pyright: ignore
-                # fmt: on
+                if output_dir is not None:
+                    save_audio(logits, data_loader.dataset.fs, id, output_dir)
 
                 # sum losses
                 loss = torch.stack(
@@ -338,19 +337,19 @@ class ModelTrainer:
                 self.update_metrics(logits, targets)
 
             # normalize loss by dataset size
-            avg_loss = running_loss / len(data_loader.dataset)  # pyright: ignore
+            avg_loss = running_loss / len(data_loader.dataset)
 
             return {"Loss": avg_loss, **self.compute_metrics()}
 
-    def test(self, test_loader, output_wav_dir: Optional[str]):
+    def test(self, test_loader, output_dir: Optional[str]):
         """
         Evaluate the model on the test data
         Args:
             test_loader: test DataLoader.
         """
-        if output_wav_dir is not None:
-            os.makedirs(output_wav_dir, exist_ok=True)
-            logger.info(f"Saving output waves to: {output_wav_dir}")
+        if output_dir is not None:
+            os.makedirs(output_dir, exist_ok=True)
+            logger.info(f"Saving output to: {output_dir}")
 
         metrics = self.evaluate(test_loader)
         logger.info("=== Test results ===")

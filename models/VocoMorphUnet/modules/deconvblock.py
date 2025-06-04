@@ -22,11 +22,8 @@ class DeconvBlock(nn.Module):
     def forward(self, x, skip_features):
         x = self.upconv(x)
 
-        diffY = skip_features.size()[2] - x.size()[2]
-        diffX = skip_features.size()[3] - x.size()[3]
-        x = nn.functional.pad(
-            x, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2]
-        )
+        diff = skip_features.size(2) - x.size(2)
+        x = nn.functional.pad(x, [diff // 2, diff - diff // 2])
 
         # concatenate skip connection features along the channel dimension
         x = torch.cat([x, skip_features], dim=1)  # dim=1 for channels

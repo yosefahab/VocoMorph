@@ -47,3 +47,8 @@ Then add it to the list in:
 data:
   effects: ["apply_my_effect"]
 ```
+
+## Inference
+
+For inference, a checkpoint and sample file are needed.
+`python run.py --mode infer_sample --sample-file /path/to/sample.wav --model-name VocoMorph --checkpoint-path /path/to/checkpoint`
