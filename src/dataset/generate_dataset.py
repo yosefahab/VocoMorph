@@ -32,7 +32,7 @@ def create_split_csv(dataset_dir: str, output_csv: str):
         for file in files:
             if file.lower().endswith(".wav"):
                 audio_files.append(
-                    {"ID": f"{id:05}", "raw_wav_path": os.path.join(root, file)}
+                    {"ID": f"{id:07}", "raw_wav_path": os.path.join(root, file)}
                 )
                 id += 1
 
@@ -85,7 +85,7 @@ def apply_effects(audio: np.ndarray, sr: int, effects: List[str]):
 def _augment_wav(args: Tuple[pd.Series, int, str, List[str]]):
     """Helper function to process a single row for parallel execution."""
     row, sr, output_dir, effects = args
-    wav_id = str(row["ID"])
+    wav_id = str(row["ID"]).zfill(7)
     raw_wav_path = str(row["raw_wav_path"])
 
     raw_wave, _ = load_audio(raw_wav_path, sr)
@@ -101,7 +101,7 @@ def _augment_wav(args: Tuple[pd.Series, int, str, List[str]]):
 
         processed_data.append(
             {
-                "ID": str(row["ID"]),
+                "ID": wav_id,
                 "effect_id": eid,
                 "raw_wav_path": raw_wav_path,
                 "modulated_wav_path": mod_wav_path,
