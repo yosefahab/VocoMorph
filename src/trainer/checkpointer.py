@@ -29,6 +29,7 @@ class Checkpointer:
         """
 
         self.config = config
+        self.checkpoint_path = config.get("checkpoint_path", None)
         self.model = model
         self.optimizers = optimizers
         self.schedulers = schedulers
@@ -64,7 +65,7 @@ class Checkpointer:
                 self.checkpoint_dir, f"ckpt_epoch_{epoch}.pt"
             )
             logger.info(
-                f"New checkpoint saved per save_interval: {self.save_interval})"
+                f"New checkpoint saved per save_interval: ({self.save_interval})"
             )
             self._save_to_disk(checkpoint_path, epoch)
 
@@ -104,9 +105,7 @@ class Checkpointer:
                 os.remove(old_checkpoint)
                 logger.info(f"Removed old checkpoint: {old_checkpoint}")
 
-    def load_checkpoint(
-        self, device: torch.device, checkpoint_path: Optional[str] = None
-    ) -> int:
+    def load_checkpoint(self, device: torch.device) -> int:
         """
         Loads a checkpoint (latest if no path is specified).
 
@@ -115,15 +114,15 @@ class Checkpointer:
         Returns:
             The epoch number to resume from.
         """
-        if checkpoint_path is None:
-            checkpoint_path = self._get_latest_checkpoint()
-            if checkpoint_path is None:
+        if self.checkpoint_path is None:
+            self.checkpoint_path = self._get_latest_checkpoint()
+            if self.checkpoint_path is None:
                 logger.info("No checkpoints found, starting from scratch.")
                 return 1
 
-        logger.info(f"Loading checkpoint from {checkpoint_path}")
+        logger.info(f"Loading checkpoint from {self.checkpoint_path}")
         checkpoint = torch.load(
-            checkpoint_path, map_location=device, weights_only=False
+            self.checkpoint_path, map_location=device, weights_only=False
         )
         self.model.load_state_dict(checkpoint["model_state_dict"])
 

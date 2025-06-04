@@ -111,14 +111,23 @@ class ModelTrainer:
         - val_loss: (Optional) Validation loss for ReduceLROnPlateau.
         """
         for scheduler in self.schedulers:
-            if step and isinstance(
+            if epoch and isinstance(
+                scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
+            ):
+                if val_loss is not None:
+                    scheduler.step(val_loss)
+                else:
+                    logger.warning(
+                        "Couldn't update ReduceLROnPlateau scheduler because val_loss is None"
+                    )
+
+            elif step and isinstance(
                 scheduler,
                 (
                     torch.optim.lr_scheduler.OneCycleLR,
                     torch.optim.lr_scheduler.LambdaLR,
                     torch.optim.lr_scheduler.ExponentialLR,
                     torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
-                    torch.optim.lr_scheduler._LRScheduler,
                 ),
             ):
                 scheduler.step()  # update step-based schedulers
@@ -132,16 +141,6 @@ class ModelTrainer:
                 ),
             ):
                 scheduler.step()  # update epoch-based schedulers
-
-            elif epoch and isinstance(
-                scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
-            ):
-                if val_loss is None:
-                    logger.warning(
-                        "Could not update ReduceLROnPlateau scheduler because val_loss is None"
-                    )
-                else:
-                    scheduler.step(val_loss)  # reduceLROnPlateau requires val_loss
 
     def update_metrics(self, logits: torch.Tensor, targets: torch.Tensor):
         """Updates each evaluation metric"""
@@ -285,17 +284,17 @@ class ModelTrainer:
                 self.log_tensorboard_metrics(epoch, train_metrics, val_metrics)
 
                 self.checkpointer.save_checkpoint(epoch, val_loss=val_metrics["Loss"])
-
             except KeyboardInterrupt:
                 logger.warning("Training interrupted. Saving checkpoint and exiting")
                 self.checkpointer.save_checkpoint(epoch)
                 break
-        else:
-            logger.info("Finished training")
-            logger.info("=== Train results ===")
-            for k in train_metrics.keys() | val_metrics.keys():
-                train_val_str = f"{k}: Train={train_metrics.get(k, 'N/A'):.4f} | Val={val_metrics.get(k, 'N/A'):.4f}"
-                logger.info(train_val_str)
+
+            else:
+                logger.info("Finished training")
+                logger.info("=== Train results ===")
+                for k in train_metrics.keys() | val_metrics.keys():
+                    train_val_str = f"{k}: Train={train_metrics.get(k, 'N/A'):.4f} | Val={val_metrics.get(k, 'N/A'):.4f}"
+                    logger.info(train_val_str)
 
         self.close_writer()
 
@@ -313,28 +312,31 @@ class ModelTrainer:
         with torch.no_grad():
             running_loss = 0.0
 
-            for id, eid, inputs, targets in tqdm(
-                data_loader, total=len(data_loader), desc="Evaluation"
-            ):
-                eid, inputs, targets = (
-                    eid.to(self.device),
-                    inputs.to(self.device),
-                    targets.to(self.device),
-                )
-                inputs = (eid, inputs)
-                logits = self.model(inputs)
+            try:
+                for id, eid, inputs, targets in tqdm(
+                    data_loader, total=len(data_loader), desc="Evaluation"
+                ):
+                    eid, inputs, targets = (
+                        eid.to(self.device),
+                        inputs.to(self.device),
+                        targets.to(self.device),
+                    )
+                    inputs = (eid, inputs)
+                    logits = self.model(inputs)
 
-                if output_dir is not None:
-                    save_audio(logits, data_loader.dataset.fs, id, output_dir)
+                    if output_dir is not None:
+                        save_audio(logits, data_loader.dataset.fs, id, output_dir)
 
-                # sum losses
-                loss = torch.stack(
-                    [criterion(logits, targets) for criterion in self.criterions]
-                ).sum()
+                    # sum losses
+                    loss = torch.stack(
+                        [criterion(logits, targets) for criterion in self.criterions]
+                    ).sum()
 
-                running_loss += loss.item() * targets.shape[0]
+                    running_loss += loss.item() * targets.shape[0]
 
-                self.update_metrics(logits, targets)
+                    self.update_metrics(logits, targets)
+            except KeyboardInterrupt:
+                logger.warning("Evaluation interrupted. Computing current results")
 
             # normalize loss by dataset size
             avg_loss = running_loss / len(data_loader.dataset)
@@ -347,6 +349,7 @@ class ModelTrainer:
         Args:
             test_loader: test DataLoader.
         """
+        logger.info("Testing model")
         if output_dir is not None:
             os.makedirs(output_dir, exist_ok=True)
             logger.info(f"Saving output to: {output_dir}")
@@ -360,4 +363,5 @@ class ModelTrainer:
         """
         Close the Tensorboard writer.
         """
+        logger.info("Closing tensorboard writer")
         self.tensorboard_writer.close()

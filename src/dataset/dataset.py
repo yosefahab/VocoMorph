@@ -136,7 +136,7 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
         dataset = VocoMorphDataset(config, datalist_filepath=datalist_filepath)
         logger.info(f"Creating dataloader for split: {split}")
         split_batch_size = config["datalists"][split]["batch_size"]
-        logger.info(f"Using {split_batch_size} batch size for split")
+        logger.info(f"Using batch size {split_batch_size} for split: {split}")
         dataloader = DataLoader(
             dataset=dataset,
             batch_size=split_batch_size,

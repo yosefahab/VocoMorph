@@ -99,3 +99,5 @@ config:
     save_interval: 5 # num epochs to save checkpoint
     save_best: true
     keep_last_n: null # false or int
+
+    checkpoint_path: null
