@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 
 def set_seed(seed: int = 14):
     """Sets the seet of the entire code to always simulate the same results everytime"""
-    logger.info(f"Setting seed to {seed}")
+    logger.info(f"Setting seed to: {seed}")
     np.random.seed(seed)
     random.seed(seed)
     torch.manual_seed(seed)

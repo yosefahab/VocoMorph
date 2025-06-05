@@ -42,7 +42,16 @@ class ModelTrainer:
         self.model.to(self.device)
 
         self.clip_norm = self.config["trainer"]["clip_norm"]
+
+        assert len(self.config["criterions"]) != 0
+        assert len(self.config["optimizers"]) != 0
+
         self.criterions = get_criterions(self.config["criterions"])
+        self.criterions_stats = {
+            c["name"]: {"ema": 1.0, "weight": c.get("weight", 1.0)}
+            for c in self.config["criterions"]
+        }
+
         self.optimizers = get_optimizers(self.config["optimizers"], model.parameters())
         self.schedulers = get_schedulers(self.config["schedulers"], self.optimizers)
         self.start_scheduling = config["trainer"]["start_scheduling"]
@@ -197,10 +206,16 @@ class ModelTrainer:
                 device_type=self.device.type, enabled=self.scaler is not None
             ):
                 logits = self.model(inputs)
-                # sum losses
-                loss = torch.stack(
-                    [criterion(logits, targets) for criterion in self.criterions]
-                ).sum()
+                # sum and normalize losses
+
+                loss = 0
+                raw_losses = {}
+                for name, criterion in self.criterions.items():
+                    raw_loss = criterion(logits, targets)
+                    raw_losses[name] = raw_loss.detach()  # keep raw loss for EMA update
+                    ema = self.criterions_stats[name]["ema"]
+                    normalized_loss = raw_loss / (ema + 1e-8)
+                    loss += normalized_loss * self.criterions_stats[name]["weight"]
 
             # backward pass
             if self.scaler:
@@ -230,6 +245,10 @@ class ModelTrainer:
             if update_schedulers:
                 self.update_schedulers(step=True, epoch=False, val_loss=None)
 
+            for name, raw_loss in raw_losses.items():
+                self.criterions_stats[name]["ema"] = (
+                    0.99 * self.criterions_stats[name]["ema"] + 0.01 * raw_loss.item()
+                )
             # update the metrics
             self.update_metrics(logits, targets)
 
@@ -263,40 +282,39 @@ class ModelTrainer:
 
         train_metrics = {}
         val_metrics = {}
-        for epoch in range(start_epoch, max_epochs):
-            try:
-                logger.info(f"Epoch {epoch}/{max_epochs}")
+        try:
+            for epoch in range(start_epoch, max_epochs):
+                logger.info(f"Entering Epoch: {epoch}/{max_epochs}")
                 train_metrics = self.train_one_epoch(train_loader)
                 val_metrics = self.evaluate(val_loader)
 
-                if epoch < self.start_scheduling:
-                    logger.info(
-                        f"Current epoch {epoch} < {self.start_scheduling}, skipping scheduling"
-                    )
-                else:
+                if epoch >= self.start_scheduling:
                     self.update_schedulers(
                         step=False,
                         epoch=True,
                         val_loss=val_metrics["Loss"],
                     )
+                else:
+                    logger.info(
+                        f"Current epoch {epoch} < {self.start_scheduling}, skipping scheduling"
+                    )
 
-                # log metrics for the epoch
                 self.log_tensorboard_metrics(epoch, train_metrics, val_metrics)
-
                 self.checkpointer.save_checkpoint(epoch, val_loss=val_metrics["Loss"])
-            except KeyboardInterrupt:
-                logger.warning("Training interrupted. Saving checkpoint and exiting")
-                self.checkpointer.save_checkpoint(epoch)
-                break
 
-            else:
-                logger.info("Finished training")
-                logger.info("=== Train results ===")
+                logger.info("=== Epoch results ===")
                 for k in train_metrics.keys() | val_metrics.keys():
-                    train_val_str = f"{k}: Train={train_metrics.get(k, 'N/A'):.4f} | Val={val_metrics.get(k, 'N/A'):.4f}"
-                    logger.info(train_val_str)
+                    logger.info(
+                        f"{k}: Train={train_metrics.get(k, 'N/A'):.4f} | Val={val_metrics.get(k, 'N/A'):.4f}"
+                    )
 
-        self.close_writer()
+        except KeyboardInterrupt:
+            logger.warning("Training interrupted. Saving checkpoint and exiting")
+            self.checkpointer.save_checkpoint(epoch)
+
+        finally:
+            logger.info("Finished training")
+            self.close_writer()
 
     def evaluate(
         self, data_loader: DataLoader, output_dir: Optional[str] = None
@@ -327,12 +345,16 @@ class ModelTrainer:
                     if output_dir is not None:
                         save_audio(logits, data_loader.dataset.fs, id, output_dir)
 
-                    # sum losses
-                    loss = torch.stack(
-                        [criterion(logits, targets) for criterion in self.criterions]
-                    ).sum()
-
-                    running_loss += loss.item() * targets.shape[0]
+                    # sum and normalize losses
+                    losses = [
+                        (
+                            criterion(logits, targets)
+                            * self.criterions_stats[name]["weight"]
+                            / (self.criterions_stats[name]["ema"] + 1e-8)
+                        )
+                        for name, criterion in self.criterions.items()
+                    ]
+                    running_loss += sum(losses).item() * targets.shape[0]
 
                     self.update_metrics(logits, targets)
             except KeyboardInterrupt:
@@ -341,7 +363,7 @@ class ModelTrainer:
             # normalize loss by dataset size
             avg_loss = running_loss / len(data_loader.dataset)
 
-            return {"Loss": avg_loss, **self.compute_metrics()}
+            return {"loss": avg_loss, **self.compute_metrics()}
 
     def test(self, test_loader, output_dir: Optional[str]):
         """

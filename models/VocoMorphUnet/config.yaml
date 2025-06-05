@@ -31,10 +31,10 @@ config:
 
     datalists:
       train:
-        batch_size: 16
+        batch_size: 8
         path: "data/metadata/timit_train.csv"
       valid:
-        batch_size: 16
+        batch_size: 8
         path: "data/metadata/timit_valid.csv"
       test:
         batch_size: 1
@@ -63,29 +63,35 @@ config:
   # ------------------------------------------------------------ #
   # loss functions
   criterions:
-    name: ["MSELoss"]
+    - name: "MSELoss"
+      weight: 1.0
+
+    - name: "CrossEntropyLoss"
+      weight: 1.0
+      params: {}
+
   # ------------------------------------------------------------ #
   optimizers:
-    name: ["AdamW"]
-    AdamW:
-      lr: 1.0e-3
-      betas: [0.9, 0.999]
-      weight_decay: 1.0e-4
+    - name: "AdamW"
+      params:
+        lr: 1.0e-3
+        betas: [0.9, 0.999]
+        weight_decay: 1.0e-4
   # ------------------------------------------------------------ #
   # LR scheduler
   schedulers:
-    name: ["ReduceLROnPlateau"]
-    ReduceLROnPlateau:
-      mode: "min"
-      min_lr: 1.0e-10
-      factor: 0.8
-      patience: 2
-    WarmupConstantSchedule:
-      warmup_steps: 1000
+    - name: "ReduceLROnPlateau"
+      params:
+        mode: "min"
+        min_lr: 1.0e-10
+        factor: 0.8
+        patience: 2
+    - name: "WarmupConstantSchedule"
+      params:
+        warmup_steps: 1000
     # ------------------------------------------------------------ #
   # metrics to evaluate the model on
-  metrics:
-    name: []
+  metrics: []
   # ------------------------------------------------------------ #
   trainer:
     max_epoch: 100

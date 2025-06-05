@@ -118,7 +118,7 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
     """
     # create dataset object for each partition
     dataset_name = config["dataset"]
-    logger.info(f"Loading dataset {dataset_name}")
+    logger.info(f"Loading dataset: {dataset_name}")
 
     collate_fn_partial = partial(collate_fn, max_length=config["max_length"])
     dataloaders = {}
@@ -130,7 +130,7 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
         assert os.path.exists(datalist_filepath), (
             f"Datalist for split {split} doesn't exist: {datalist_filepath}"
         )
-        logger.info(f"Loading {split} data from {datalist_filepath}")
+        logger.info(f"Loading {split} data from: {datalist_filepath}")
         num_workers = min(config["num_workers"], max(0, cpu_count() - 2))
         logger.info(f"Using {num_workers} workers for DataLoaders")
         dataset = VocoMorphDataset(config, datalist_filepath=datalist_filepath)
