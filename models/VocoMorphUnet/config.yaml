@@ -18,9 +18,9 @@ config:
     channels: &var_num_channels 1 # mono/stereo
     sample_rate: 16000
     n_mels: 80
-    n_fft: 512
-    win_length: 512
-    hop_length: 128
+    n_fft: &var_n_fft 512
+    win_length: &var_win_length 512
+    hop_length: &var_hop_length 128
 
     # the chunk of audio the model processes at a time
     frame_length: &var_frame_length 4096 # 256 ms at 16k
@@ -63,20 +63,25 @@ config:
   # ------------------------------------------------------------ #
   # loss functions
   criterions:
-    - name: "MSELoss"
-      weight: 1.0
+    # - name: "MSELoss"
+    #   weight: 1.0
 
-    - name: "CrossEntropyLoss"
+    - name: "STFTLoss"
       weight: 1.0
-      params: {}
+      params:
+        alpha: 0.5
+        beta: 0.5
+        n_fft: *var_n_fft
+        hop_length: *var_hop_length
+        win_length: *var_win_length
 
   # ------------------------------------------------------------ #
   optimizers:
     - name: "AdamW"
       params:
-        lr: 1.0e-3
+        lr: 1.0e-4
         betas: [0.9, 0.999]
-        weight_decay: 1.0e-4
+        weight_decay: 1.0e-5
   # ------------------------------------------------------------ #
   # LR scheduler
   schedulers:
@@ -97,7 +102,7 @@ config:
     max_epoch: 100
     gpuid: [0]
     clip_norm: 5
-    start_scheduling: 50
+    start_scheduling: 1
     test_epochs: [20, 50, 100]
     precision: "fp16"
 

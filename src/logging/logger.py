@@ -48,7 +48,9 @@ def setup_logging(
     log_format = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
 
     console_handler = logging.StreamHandler()
-    console_handler.setFormatter(ColorFormatter(log_format))
+    console_handler.setFormatter(
+        ColorFormatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")
+    )
     handlers: List[logging.Handler] = [console_handler]
 
     if log_to_file:
@@ -56,6 +58,9 @@ def setup_logging(
             os.path.join(log_dir, "logs.log"),
             maxBytes=max_file_size,
             backupCount=backup_count,
+        )
+        file_handler.setFormatter(
+            logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S")
         )
         handlers.append(file_handler)
 

@@ -119,6 +119,7 @@ class ModelTrainer:
         - epoch: If True, update epoch-based schedulers (called per epoch).
         - val_loss: (Optional) Validation loss for ReduceLROnPlateau.
         """
+        logger.info("Updating schedulers")
         for scheduler in self.schedulers:
             if epoch and isinstance(
                 scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
@@ -363,7 +364,7 @@ class ModelTrainer:
             # normalize loss by dataset size
             avg_loss = running_loss / len(data_loader.dataset)
 
-            return {"loss": avg_loss, **self.compute_metrics()}
+            return {"Loss": avg_loss, **self.compute_metrics()}
 
     def test(self, test_loader, output_dir: Optional[str]):
         """

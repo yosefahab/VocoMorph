@@ -24,7 +24,7 @@ class VocoMorphDataset(Dataset):
         self.max_length = config["max_length"]
         self.datalist_filepath = datalist_filepath
 
-        self.df = pd.read_csv(datalist_filepath).iloc[:100]
+        self.df = pd.read_csv(datalist_filepath)
         self.n = len(self.df)
         logger.info(f"Dataset records = {self.n}")
 
