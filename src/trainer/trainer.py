@@ -273,7 +273,7 @@ class ModelTrainer:
         max_epochs: int,
         train_loader: DataLoader,
         val_loader: DataLoader,
-        test_loader: DataLoader,
+        test_loader: Optional[DataLoader],
     ):
         """
         Train the model over multiple epochs. The last checkpoint is automatically loaded.
@@ -281,7 +281,7 @@ class ModelTrainer:
             max_epochs: maximum number of epochs to train the model for.
             train_loader: training set DataLoader.
             val_loader: validation set DataLoader.
-            test_loader: test set DataLoader.
+            test_loader: optional test set DataLoader.
         """
         # create logs dir and tensorboard loggers for current training run
         self.logs_dir = os.path.join(
@@ -306,7 +306,7 @@ class ModelTrainer:
                 train_metrics = self.train_one_epoch(train_loader)
                 val_metrics = self.evaluate(val_loader)
 
-                if epoch in self.test_epochs:
+                if test_loader and epoch in self.test_epochs:
                     self.test(test_loader)
 
                 if epoch >= self.start_scheduling:
@@ -380,7 +380,7 @@ class ModelTrainer:
 
             return {"Loss": avg_loss, **self.compute_metrics()}
 
-    def test(self, test_loader: DataLoader, output_dir: Optional[str]):
+    def test(self, test_loader: DataLoader, output_dir: Optional[str] = None):
         """
         Evaluate the model on the test data
         Args:

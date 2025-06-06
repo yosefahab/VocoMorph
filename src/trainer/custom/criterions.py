@@ -108,6 +108,7 @@ class VocalModulationLoss:
     alpha: float
     beta: float
     gamma: float
+    delta: float
 
     sample_rate: int
     n_mels: int
@@ -151,5 +152,5 @@ class VocalModulationLoss:
             self.alpha * mag_loss
             + self.beta * (phase_real_loss + phase_imag_loss)
             + self.gamma * time_loss
-            + mel_loss
+            + self.delta * mel_loss
         )

@@ -16,11 +16,11 @@ config:
     drop_last: true
 
     channels: &var_num_channels 1 # mono/stereo
-    sample_rate: 16000
-    n_mels: 80
-    n_fft: &var_n_fft 512
-    win_length: &var_win_length 512
-    hop_length: &var_hop_length 128
+    sample_rate: &var_sample_rate 16000
+    n_mels: &var_n_mels 80
+    n_fft: &var_n_fft 1024
+    win_length: &var_win_length 1024
+    hop_length: &var_hop_length 256
 
     # the chunk of audio the model processes at a time
     frame_length: &var_frame_length 4096 # 256 ms at 16k
@@ -65,7 +65,7 @@ config:
   criterions:
     # - name: "MSELoss"
     #   weight: 1.0
- 
+
     # - name: "STFTLoss"
     #   weight: 1.0
     #   params:
@@ -75,20 +75,33 @@ config:
     #     hop_length: *var_hop_length
     #     win_length: *var_win_length
 
-    - name: "MultiResolutionSTFTLoss"
-      weight: 1.0
+    # - name: "MultiResolutionSTFTLoss"
+    #   weight: 1.0
+    #   params:
+    #     alpha: 0.5
+    #     beta: 0.5
+    #     # n_fft, hop_length, win_length
+    #     resolutions: [
+    #     # Good frequency resolution, medium time resolution
+    #         [1024, 1024, 256],
+    #     # Excellent frequency resolution, poor time resolution
+    #         [2048, 2048, 512],
+    #     # Moderate frequency resolution, good time resolution
+    #         [512, 512, 128],
+    #       ]
+    - name: "VocalModulationLoss"
+
       params:
         alpha: 0.5
-        beta: 0.5
-        # n_fft, hop_length, win_length
-        resolutions: [
-        # Good frequency resolution, medium time resolution
-            [1024, 1024, 256], 
-        # Excellent frequency resolution, poor time resolution
-            [2048, 2048, 512], 
-        # Moderate frequency resolution, good time resolution
-            [512, 512, 128], 
-          ]
+        beta: 0.2
+        gamma: 0.1
+        delta: 1.0
+
+        sample_rate: *var_sample_rate
+        n_mels: *var_n_mels
+        n_fft: *var_n_fft
+        hop_length: *var_hop_length
+        win_length: *var_win_length
 
   # ------------------------------------------------------------ #
   optimizers:
@@ -122,9 +135,8 @@ config:
     precision: "fp16"
     grad_accumulation_steps: 4
 
-
   checkpointer:
-    save_interval: 5  # num epochs to save checkpoint
+    save_interval: 5 # num epochs to save checkpoint
     save_best: true
-    keep_last_n: null  # false or int
+    keep_last_n: null # false or int
     checkpoint_path: null # checkpoint to load or start from
