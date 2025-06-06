@@ -65,15 +65,30 @@ config:
   criterions:
     # - name: "MSELoss"
     #   weight: 1.0
+ 
+    # - name: "STFTLoss"
+    #   weight: 1.0
+    #   params:
+    #     alpha: 0.5
+    #     beta: 0.5
+    #     n_fft: *var_n_fft
+    #     hop_length: *var_hop_length
+    #     win_length: *var_win_length
 
-    - name: "STFTLoss"
+    - name: "MultiResolutionSTFTLoss"
       weight: 1.0
       params:
         alpha: 0.5
         beta: 0.5
-        n_fft: *var_n_fft
-        hop_length: *var_hop_length
-        win_length: *var_win_length
+        # n_fft, hop_length, win_length
+        resolutions: [
+        # Good frequency resolution, medium time resolution
+            [1024, 1024, 256], 
+        # Excellent frequency resolution, poor time resolution
+            [2048, 2048, 512], 
+        # Moderate frequency resolution, good time resolution
+            [512, 512, 128], 
+          ]
 
   # ------------------------------------------------------------ #
   optimizers:
@@ -91,9 +106,9 @@ config:
         min_lr: 1.0e-10
         factor: 0.8
         patience: 2
-    - name: "WarmupConstantSchedule"
-      params:
-        warmup_steps: 1000
+    # - name: "WarmupConstantSchedule"
+    #   params:
+    #     warmup_steps: 1000
     # ------------------------------------------------------------ #
   # metrics to evaluate the model on
   metrics: []
@@ -105,10 +120,11 @@ config:
     start_scheduling: 1
     test_epochs: [20, 50, 100]
     precision: "fp16"
+    grad_accumulation_steps: 4
+
 
   checkpointer:
-    save_interval: 5 # num epochs to save checkpoint
+    save_interval: 5  # num epochs to save checkpoint
     save_best: true
-    keep_last_n: null # false or int
-
-    checkpoint_path: null
+    keep_last_n: null  # false or int
+    checkpoint_path: null # checkpoint to load or start from

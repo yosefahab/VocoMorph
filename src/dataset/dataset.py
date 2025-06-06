@@ -25,6 +25,8 @@ class VocoMorphDataset(Dataset):
         self.datalist_filepath = datalist_filepath
 
         self.df = pd.read_csv(datalist_filepath)
+        self.df = self.df[self.df["effect_id"] != 0].iloc[:2000]
+
         self.n = len(self.df)
         logger.info(f"Dataset records = {self.n}")
 
@@ -92,18 +94,11 @@ def collate_fn(batch, max_length):
     raw_waves = torch.stack([pad_wave(w, max_length) for w in raw_waves])
     modulated_waves = torch.stack([pad_wave(w, max_length) for w in modulated_waves])
 
-    # create a mask where 1 = real data, 0 = padding
-    # masks = torch.tensor(
-    #     [[1] * w.shape[1] + [0] * (max_length - w.shape[1]) for w in raw_waves],
-    #     dtype=torch.bool,
-    # )
-
     return (
         ids,
         effect_ids,
         raw_waves,
         modulated_waves,
-        # masks,
     )
 
 

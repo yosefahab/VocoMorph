@@ -21,7 +21,7 @@ def main(args: Namespace, config: dict):
         set_seed(config["seed"])
         loaders = get_dataloaders(["train", "valid"], config["data"])
         epochs = config["trainer"]["max_epoch"]
-        trainer.train(epochs, loaders["train"], loaders["valid"])
+        trainer.train(epochs, loaders["train"], loaders["valid"], loaders["test"])
     elif args.mode == "test":
         trainer = ModelTrainer(config, model_dir, model, device)
         loaders = get_dataloaders(["test"], config["data"])

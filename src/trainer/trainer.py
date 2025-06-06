@@ -55,12 +55,15 @@ class ModelTrainer:
         self.optimizers = get_optimizers(self.config["optimizers"], model.parameters())
         self.schedulers = get_schedulers(self.config["schedulers"], self.optimizers)
         self.start_scheduling = config["trainer"]["start_scheduling"]
+        self.grad_accum_steps = self.config["trainer"].get("grad_accumulation_steps", 1)
+        logger.info(f"Using gradient accumulation steps: {self.grad_accum_steps}")
 
         self.scaler = None
         if self.config["trainer"]["precision"] == "fp16" and self.device.type == "cuda":
             logger.info("Using mixed precision & GradScaler")
             self.scaler = GradScaler()
 
+        self.test_epochs = self.config["trainer"].get("test_epochs", [])
         self.metrics = get_metrics(self.config["metrics"])
 
         self.checkpoints_dir = os.path.join(self.model_dir, "checkpoints")
@@ -119,7 +122,6 @@ class ModelTrainer:
         - epoch: If True, update epoch-based schedulers (called per epoch).
         - val_loss: (Optional) Validation loss for ReduceLROnPlateau.
         """
-        logger.info("Updating schedulers")
         for scheduler in self.schedulers:
             if epoch and isinstance(
                 scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
@@ -177,9 +179,48 @@ class ModelTrainer:
 
         return results
 
-    def train_one_epoch(
-        self, data_loader: DataLoader, update_schedulers: bool = False
-    ) -> dict:
+    def compute_loss_and_normalized_loss(self, logits, targets):
+        loss = 0
+        raw_losses = {}
+        for name, criterion in self.criterions.items():
+            raw_loss = criterion(logits, targets)
+            raw_losses[name] = raw_loss.detach()
+            ema = self.criterions_stats[name]["ema"]
+            norm_loss = raw_loss / (ema + 1e-8)
+            loss += norm_loss * self.criterions_stats[name]["weight"]
+        return loss, raw_losses
+
+    def update_ema(self, raw_losses):
+        for name, raw_loss in raw_losses.items():
+            self.criterions_stats[name]["ema"] = (
+                0.99 * self.criterions_stats[name]["ema"] + 0.01 * raw_loss.item()
+            )
+
+    def accumulate_and_step(self, loss, step_idx, total_steps):
+        if self.scaler:
+            self.scaler.scale(loss).backward()
+        else:
+            loss.backward()
+
+        if (step_idx + 1) % self.grad_accum_steps == 0 or (step_idx + 1) == total_steps:
+            for optimizer in self.optimizers:
+                if self.clip_norm:
+                    if self.scaler:
+                        self.scaler.unscale_(optimizer)
+                    clip_grad_norm_(self.model.parameters(), self.clip_norm)
+
+                if self.scaler:
+                    self.scaler.step(optimizer)
+                else:
+                    optimizer.step()
+
+            if self.scaler:
+                self.scaler.update()
+
+            for optimizer in self.optimizers:
+                optimizer.zero_grad()
+
+    def train_one_epoch(self, data_loader: DataLoader) -> dict:
         """
         Args:
             data_loader: DataLoader for training data.
@@ -189,82 +230,58 @@ class ModelTrainer:
         self.model.train()
         running_loss = 0.0
 
-        for _, eid, inputs, targets in tqdm(
-            data_loader, total=len(data_loader), desc="Training"
-        ):
+        autocast_enabled = self.scaler is not None
+
+        total_steps = len(data_loader)
+        pbar = tqdm(data_loader, total=total_steps, desc="Training")
+        for step, (_, eid, inputs, targets) in enumerate(pbar):
             eid, inputs, targets = (
                 eid.to(self.device),
                 inputs.to(self.device),
                 targets.to(self.device),
             )
-            inputs = (eid, inputs)
+            with amp.autocast(device_type=self.device.type, enabled=autocast_enabled):
+                logits = self.model((eid, inputs))
 
-            # zero out gradients for all optimizers
-            for optimizer in self.optimizers:
-                optimizer.zero_grad()
-
-            with amp.autocast(
-                device_type=self.device.type, enabled=self.scaler is not None
-            ):
-                logits = self.model(inputs)
-                # sum and normalize losses
-
-                loss = 0
-                raw_losses = {}
-                for name, criterion in self.criterions.items():
-                    raw_loss = criterion(logits, targets)
-                    raw_losses[name] = raw_loss.detach()  # keep raw loss for EMA update
-                    ema = self.criterions_stats[name]["ema"]
-                    normalized_loss = raw_loss / (ema + 1e-8)
-                    loss += normalized_loss * self.criterions_stats[name]["weight"]
+                # sum, normalize and weight losses
+                normalized_loss, raw_loss = self.compute_loss_and_normalized_loss(
+                    logits, targets
+                )
 
             # backward pass
-            if self.scaler:
-                self.scaler.scale(loss).backward()
-                for optimizer in self.optimizers:
-                    if self.clip_norm:
-                        self.scaler.unscale_(optimizer)
-                        clip_grad_norm_(
-                            self.model.parameters(), max_norm=self.clip_norm
-                        )
-
-                    self.scaler.step(optimizer)
-                self.scaler.update()
-            else:
-                loss.backward()
-                for optimizer in self.optimizers:
-                    if self.clip_norm:
-                        clip_grad_norm_(
-                            self.model.parameters(), max_norm=self.clip_norm
-                        )
-                    optimizer.step()
+            self.accumulate_and_step(normalized_loss, step, total_steps)
 
             # accumulate loss
-            running_loss += loss.item()
+            running_loss += normalized_loss.item()
 
             # update schedulers for STEP only
-            if update_schedulers:
-                self.update_schedulers(step=True, epoch=False, val_loss=None)
+            self.update_schedulers(step=True, epoch=False, val_loss=None)
 
-            for name, raw_loss in raw_losses.items():
-                self.criterions_stats[name]["ema"] = (
-                    0.99 * self.criterions_stats[name]["ema"] + 0.01 * raw_loss.item()
-                )
+            # update ema
+            self.update_ema(raw_loss)
+
             # update the metrics
             self.update_metrics(logits, targets)
 
         # normalize loss by dataset size
-        avg_loss = running_loss / len(data_loader.dataset)  # pyright: ignore
+        avg_loss = running_loss / len(data_loader.dataset)
 
         return {"Loss": avg_loss, **self.compute_metrics()}
 
-    def train(self, max_epochs: int, train_loader: DataLoader, val_loader: DataLoader):
+    def train(
+        self,
+        max_epochs: int,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        test_loader: DataLoader,
+    ):
         """
         Train the model over multiple epochs. The last checkpoint is automatically loaded.
         Args:
             max_epochs: maximum number of epochs to train the model for.
             train_loader: training set DataLoader.
             val_loader: validation set DataLoader.
+            test_loader: test set DataLoader.
         """
         # create logs dir and tensorboard loggers for current training run
         self.logs_dir = os.path.join(
@@ -288,6 +305,9 @@ class ModelTrainer:
                 logger.info(f"Entering Epoch: {epoch}/{max_epochs}")
                 train_metrics = self.train_one_epoch(train_loader)
                 val_metrics = self.evaluate(val_loader)
+
+                if epoch in self.test_epochs:
+                    self.test(test_loader)
 
                 if epoch >= self.start_scheduling:
                     self.update_schedulers(
@@ -326,36 +346,30 @@ class ModelTrainer:
         Returns:
         - Evaluation metrics. Check compute_metrics() for more details.
         """
-        logger.info("Evaluating model")
         self.model.eval()
         with torch.no_grad():
             running_loss = 0.0
 
             try:
-                for id, eid, inputs, targets in tqdm(
-                    data_loader, total=len(data_loader), desc="Evaluation"
-                ):
+                pbar = tqdm(data_loader, total=len(data_loader), desc="Evaluation")
+                for id, eid, inputs, targets in pbar:
                     eid, inputs, targets = (
                         eid.to(self.device),
                         inputs.to(self.device),
                         targets.to(self.device),
                     )
-                    inputs = (eid, inputs)
-                    logits = self.model(inputs)
+                    logits = self.model((eid, inputs))
 
                     if output_dir is not None:
                         save_audio(logits, data_loader.dataset.fs, id, output_dir)
 
-                    # sum and normalize losses
-                    losses = [
-                        (
-                            criterion(logits, targets)
-                            * self.criterions_stats[name]["weight"]
-                            / (self.criterions_stats[name]["ema"] + 1e-8)
-                        )
+                    # sum weighted losses
+                    raw_losses = [
+                        criterion(logits, targets)
+                        * self.criterions_stats[name]["weight"]
                         for name, criterion in self.criterions.items()
                     ]
-                    running_loss += sum(losses).item() * targets.shape[0]
+                    running_loss += sum(raw_losses).item() * targets.shape[0]
 
                     self.update_metrics(logits, targets)
             except KeyboardInterrupt:
@@ -366,7 +380,7 @@ class ModelTrainer:
 
             return {"Loss": avg_loss, **self.compute_metrics()}
 
-    def test(self, test_loader, output_dir: Optional[str]):
+    def test(self, test_loader: DataLoader, output_dir: Optional[str]):
         """
         Evaluate the model on the test data
         Args:
