@@ -13,11 +13,7 @@ from torch.nn.utils import clip_grad_norm_
 from src.logging.logger import get_logger
 from src.utils import save_audio
 from .checkpointer import Checkpointer
-from .factory import (
-    get_criterions,
-    get_metrics,
-    get_optimizers_and_schedulers,  # Changed import
-)
+from .factory import get_criterions, get_metrics, get_optimizers_and_schedulers
 
 
 logger = get_logger(__name__)
@@ -127,8 +123,9 @@ class ModelTrainer:
         - epoch: If True, update epoch-based schedulers (called per epoch).
         - val_loss: (Optional) Validation loss for ReduceLROnPlateau.
         """
+        # no optimizers/schedulers to update
         if not self.optimizers_and_schedulers:
-            return  # No optimizers/schedulers to update
+            return
 
         for item in self.optimizers_and_schedulers:
             scheduler = item["scheduler"]
@@ -309,6 +306,7 @@ class ModelTrainer:
 
         # load last checkpoint (or start from scratch if 1)
         start_epoch = self.checkpointer.load_checkpoint(self.device)
+
         # log training info
         logger.info(
             f"Starting training from epoch: {start_epoch} for {max_epochs} max epochs."

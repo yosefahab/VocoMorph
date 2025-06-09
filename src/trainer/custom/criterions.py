@@ -184,3 +184,13 @@ class SI_SNRLoss:
         si_snr = 10 * torch.log10(ratio + self.eps)
 
         return -si_snr.mean()
+
+
+@dataclass(slots=True)
+class EnergyLoss:
+    def __call__(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        output_energy = torch.mean(logits**2, dim=-1)
+        target_energy = torch.mean(targets**2, dim=-1)
+        # MSE usually better for energy
+        energy_loss = F.mse_loss(output_energy, target_energy, reduction="mean")
+        return energy_loss

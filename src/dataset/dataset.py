@@ -25,7 +25,7 @@ class VocoMorphDataset(Dataset):
         self.datalist_filepath = datalist_filepath
 
         self.df = pd.read_csv(datalist_filepath)
-        self.df = self.df[self.df["effect_id"] != 0].iloc[:500]
+        self.df = self.df[self.df["effect_id"] != 0].iloc[:2000]
 
         self.n = len(self.df)
         logger.info(f"Dataset records = {self.n}")

@@ -63,47 +63,51 @@ config:
   # ------------------------------------------------------------ #
   # loss functions
   criterions:
-    - name: "SI_SNRLoss"
-      weight: 1.0
-
-    - name: "MultiResolutionSTFTLoss"
-      weight: 1.0
-      params:
-        alpha: 1.0
-        beta: 0.5
-        resolutions: [
-        # Good frequency resolution, medium time resolution
-            [1024, 1024, 256],
-        # Excellent frequency resolution, poor time resolution
-            [2048, 2048, 512],
-        # Moderate frequency resolution, good time resolution
-            [512, 512, 128],
-        ]
-
-    - name: "STFTLoss"
-      weight: 0.5
-      params:
-        alpha: 0.5
-        beta: 0.5
-        n_fft: *var_n_fft
-        hop_length: *var_hop_length
-        win_length: *var_win_length
-
-    - name: "VocalModulationLoss"
-      weight: 0.7
-      params:
-        alpha: 0.5
-        beta: 0.2
-        gamma: 0.1
-        delta: 1.0
-        sample_rate: *var_sample_rate
-        n_mels: *var_n_mels
-        n_fft: *var_n_fft
-        hop_length: *var_hop_length
-        win_length: *var_win_length
+    - name: "EnergyLoss"
+      weight: 10.0
 
     - name: "MSELoss"
-      weight: 0.1
+      weight: 1.0
+
+    # - name: "SI_SNRLoss"
+    #   weight: 1.0
+    #
+    # - name: "MultiResolutionSTFTLoss"
+    #   weight: 1.0
+    #   params:
+    #     alpha: 1.0
+    #     beta: 0.5
+    #     resolutions: [
+    #     # Good frequency resolution, medium time resolution
+    #         [1024, 1024, 256],
+    #     # Excellent frequency resolution, poor time resolution
+    #         [2048, 2048, 512],
+    #     # Moderate frequency resolution, good time resolution
+    #         [512, 512, 128],
+    #     ]
+    #
+    # - name: "STFTLoss"
+    #   weight: 0.5
+    #   params:
+    #     alpha: 0.5
+    #     beta: 0.5
+    #     n_fft: *var_n_fft
+    #     hop_length: *var_hop_length
+    #     win_length: *var_win_length
+    #
+    # - name: "VocalModulationLoss"
+    #   weight: 0.7
+    #   params:
+    #     alpha: 0.5
+    #     beta: 0.2
+    #     gamma: 0.1
+    #     delta: 1.0
+    #     sample_rate: *var_sample_rate
+    #     n_mels: *var_n_mels
+    #     n_fft: *var_n_fft
+    #     hop_length: *var_hop_length
+    #     win_length: *var_win_length
+    #
   # ------------------------------------------------------------ #
   optimizers:
     - name: "AdamW"
