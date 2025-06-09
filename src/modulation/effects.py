@@ -9,6 +9,7 @@ from .transformations import (
     apply_compression,
     normalize_audio,
     apply_pitch_shift,
+    identity_transform,
 )
 
 
@@ -129,9 +130,9 @@ def apply_vocoder(
     """
     Applies a basic vocoder effect by modulating a carrier wave with the input audio's frequency envelopes.
     """
-    assert (
-        audio.shape == carrier.shape
-    ), "Audio and carrier must have the same shape (C, T)"
+    assert audio.shape == carrier.shape, (
+        "Audio and carrier must have the same shape (C, T)"
+    )
     band_edges = np.logspace(np.log10(min_freq), np.log10(max_freq), num_bands + 1)
     output = np.zeros_like(audio, dtype=np.float32)
 

@@ -1,10 +1,6 @@
-"""
-Generic trainer class template.
-"""
-
 import os
 from tqdm import tqdm
-from typing import Optional
+from typing import Optional, Tuple
 from datetime import datetime
 
 import torch
@@ -20,8 +16,7 @@ from .checkpointer import Checkpointer
 from .factory import (
     get_criterions,
     get_metrics,
-    get_optimizers,
-    get_schedulers,
+    get_optimizers_and_schedulers,  # Changed import
 )
 
 
@@ -43,17 +38,23 @@ class ModelTrainer:
 
         self.clip_norm = self.config["trainer"]["clip_norm"]
 
-        assert len(self.config["criterions"]) != 0
-        assert len(self.config["optimizers"]) != 0
-
         self.criterions = get_criterions(self.config["criterions"])
         self.criterions_stats = {
             c["name"]: {"ema": 1.0, "weight": c.get("weight", 1.0)}
             for c in self.config["criterions"]
         }
 
-        self.optimizers = get_optimizers(self.config["optimizers"], model.parameters())
-        self.schedulers = get_schedulers(self.config["schedulers"], self.optimizers)
+        self.optimizers_and_schedulers = get_optimizers_and_schedulers(
+            self.config.get("optimizers", []), model.parameters()
+        )
+
+        self.optimizers = [item["optimizer"] for item in self.optimizers_and_schedulers]
+        self.schedulers = [
+            item["scheduler"]
+            for item in self.optimizers_and_schedulers
+            if item["scheduler"] is not None
+        ]
+
         self.start_scheduling = config["trainer"]["start_scheduling"]
         self.grad_accum_steps = self.config["trainer"].get("grad_accumulation_steps", 1)
         logger.info(f"Using gradient accumulation steps: {self.grad_accum_steps}")
@@ -70,7 +71,7 @@ class ModelTrainer:
         os.makedirs(self.checkpoints_dir, exist_ok=True)
 
         self.checkpointer = Checkpointer(
-            self.config,
+            self.config["checkpointer"],
             self.model,
             self.optimizers,
             self.schedulers,
@@ -78,9 +79,10 @@ class ModelTrainer:
             self.checkpoints_dir,
         )
 
-        logger.info("=== Model summary ===")
-        with open(os.path.join(self.model_dir, "model_summary.txt"), "w") as f:
-            f.write(str(summary(self.model, device=device)))
+        summary_file = os.path.join(self.model_dir, "model_summary.txt")
+        with open(summary_file, "w") as f:
+            logger.info(f"Saving model summary to: {summary_file}")
+            f.write(str(summary(self.model, device=device, verbose=0)))
 
     def log_tensorboard_metrics(
         self,
@@ -99,11 +101,14 @@ class ModelTrainer:
                 epoch,
             )
 
-        for i, optimizer in enumerate(self.optimizers):
-            for j, param_group in enumerate(optimizer.param_groups):
+        # iterate through optimizers_and_schedulers to log learning rates
+        for item in self.optimizers_and_schedulers:
+            optimizer = item["optimizer"]
+            optimizer_name = optimizer.__class__.__name__
+            for i, param_group in enumerate(optimizer.param_groups):
                 self.tensorboard_writer.add_scalars(
                     "LR",
-                    {f"optimizer_{i}_group_{j}": param_group["lr"]},
+                    {f"optimizer_{optimizer_name}_g{i}": param_group["lr"]},
                     epoch,
                 )
         self.tensorboard_writer.flush()
@@ -122,7 +127,14 @@ class ModelTrainer:
         - epoch: If True, update epoch-based schedulers (called per epoch).
         - val_loss: (Optional) Validation loss for ReduceLROnPlateau.
         """
-        for scheduler in self.schedulers:
+        if not self.optimizers_and_schedulers:
+            return  # No optimizers/schedulers to update
+
+        for item in self.optimizers_and_schedulers:
+            scheduler = item["scheduler"]
+            if scheduler is None:
+                continue
+
             if epoch and isinstance(
                 scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
             ):
@@ -179,7 +191,9 @@ class ModelTrainer:
 
         return results
 
-    def compute_loss_and_normalized_loss(self, logits, targets):
+    def compute_loss_and_normalized_loss(
+        self, logits: torch.Tensor, targets: torch.Tensor
+    ) -> Tuple[float, dict]:
         loss = 0
         raw_losses = {}
         for name, criterion in self.criterions.items():
@@ -190,20 +204,21 @@ class ModelTrainer:
             loss += norm_loss * self.criterions_stats[name]["weight"]
         return loss, raw_losses
 
-    def update_ema(self, raw_losses):
+    def update_ema(self, raw_losses: dict):
         for name, raw_loss in raw_losses.items():
             self.criterions_stats[name]["ema"] = (
                 0.99 * self.criterions_stats[name]["ema"] + 0.01 * raw_loss.item()
             )
 
-    def accumulate_and_step(self, loss, step_idx, total_steps):
+    def accumulate_and_step(self, loss: float, step: int, total_steps: int):
         if self.scaler:
             self.scaler.scale(loss).backward()
         else:
             loss.backward()
 
-        if (step_idx + 1) % self.grad_accum_steps == 0 or (step_idx + 1) == total_steps:
-            for optimizer in self.optimizers:
+        if (step + 1) % self.grad_accum_steps == 0 or (step + 1) == total_steps:
+            for item in self.optimizers_and_schedulers:
+                optimizer = item["optimizer"]
                 if self.clip_norm:
                     if self.scaler:
                         self.scaler.unscale_(optimizer)
@@ -217,7 +232,8 @@ class ModelTrainer:
             if self.scaler:
                 self.scaler.update()
 
-            for optimizer in self.optimizers:
+            for item in self.optimizers_and_schedulers:
+                optimizer = item["optimizer"]
                 optimizer.zero_grad()
 
     def train_one_epoch(self, data_loader: DataLoader) -> dict:
@@ -311,9 +327,7 @@ class ModelTrainer:
 
                 if epoch >= self.start_scheduling:
                     self.update_schedulers(
-                        step=False,
-                        epoch=True,
-                        val_loss=val_metrics["Loss"],
+                        step=False, epoch=True, val_loss=val_metrics["Loss"]
                     )
                 else:
                     logger.info(
@@ -343,6 +357,7 @@ class ModelTrainer:
         """
         Args:
             data_loader: validation set DataLoader.
+            output_dir: optional directory to save intermediate outputs
         Returns:
         - Evaluation metrics. Check compute_metrics() for more details.
         """
@@ -350,30 +365,26 @@ class ModelTrainer:
         with torch.no_grad():
             running_loss = 0.0
 
-            try:
-                pbar = tqdm(data_loader, total=len(data_loader), desc="Evaluation")
-                for id, eid, inputs, targets in pbar:
-                    eid, inputs, targets = (
-                        eid.to(self.device),
-                        inputs.to(self.device),
-                        targets.to(self.device),
-                    )
-                    logits = self.model((eid, inputs))
+            pbar = tqdm(data_loader, total=len(data_loader), desc="Evaluation")
+            for id, eid, inputs, targets in pbar:
+                eid, inputs, targets = (
+                    eid.to(self.device),
+                    inputs.to(self.device),
+                    targets.to(self.device),
+                )
+                logits = self.model((eid, inputs))
 
-                    if output_dir is not None:
-                        save_audio(logits, data_loader.dataset.fs, id, output_dir)
+                if output_dir is not None:
+                    save_audio(logits, data_loader.dataset.fs, id, output_dir)
 
-                    # sum weighted losses
-                    raw_losses = [
-                        criterion(logits, targets)
-                        * self.criterions_stats[name]["weight"]
-                        for name, criterion in self.criterions.items()
-                    ]
-                    running_loss += sum(raw_losses).item() * targets.shape[0]
+                # sum weighted losses
+                raw_losses = [
+                    criterion(logits, targets) * self.criterions_stats[name]["weight"]
+                    for name, criterion in self.criterions.items()
+                ]
+                running_loss += sum(raw_losses).item() * targets.shape[0]
 
-                    self.update_metrics(logits, targets)
-            except KeyboardInterrupt:
-                logger.warning("Evaluation interrupted. Computing current results")
+                self.update_metrics(logits, targets)
 
             # normalize loss by dataset size
             avg_loss = running_loss / len(data_loader.dataset)

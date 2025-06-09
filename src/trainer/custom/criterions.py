@@ -1,5 +1,5 @@
-from typing import Callable, List, Tuple
 from dataclasses import dataclass, field
+from typing import Callable, List, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -154,3 +154,33 @@ class VocalModulationLoss:
             + self.gamma * time_loss
             + self.delta * mel_loss
         )
+
+
+@dataclass(slots=True)
+class SI_SNRLoss:
+    eps: float = 1e-8
+
+    def __call__(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """
+        Compute Scale-Invariant Signal-to-Noise Ratio (SI-SNR) loss.
+        Args:
+            preds: (B, T)
+            targets: (B, T)
+        Returns:
+            Negative SI-SNR as a loss (scalar)
+        """
+        preds = preds - preds.mean(dim=-1, keepdim=True)
+        targets = targets - targets.mean(dim=-1, keepdim=True)
+
+        dot = torch.sum(preds * targets, dim=-1, keepdim=True)
+        target_energy = torch.sum(targets**2, dim=-1, keepdim=True) + self.eps
+        scale = dot / target_energy
+        projection = scale * targets
+
+        noise = preds - projection
+        ratio = torch.sum(projection**2, dim=-1) / (
+            torch.sum(noise**2, dim=-1) + self.eps
+        )
+        si_snr = 10 * torch.log10(ratio + self.eps)
+
+        return -si_snr.mean()

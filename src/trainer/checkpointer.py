@@ -30,14 +30,26 @@ class Checkpointer:
 
         self.config = config
         self.checkpoint_path = config.get("checkpoint_path", None)
+        if self.checkpoint_path:
+            logger.info(f"Starting from checkpoint: {self.checkpoint_path}")
+
         self.model = model
         self.optimizers = optimizers
         self.schedulers = schedulers
         self.scaler = scaler
         self.checkpoint_dir = checkpoints_dir
+
         self.save_interval = config.get("save_interval", 1)
-        self.keep_last_n = config.get("keep_last_n", None)
-        self.save_best = config.get("save_best", None)
+        logger.info(f"Using save interval: {self.save_interval} for checkpointer")
+
+        self.keep_last_n = config.get("keep_last_n", False)
+        if self.keep_last_n:
+            logger.info(f"Using keep last {self.keep_last_n} policy for checkpointer")
+
+        self.save_best = config.get("save_best", False)
+        if self.save_best:
+            logger.info("Using save best policy for checkpointer")
+
         self.best_val_loss = float("inf")
 
         os.makedirs(self.checkpoint_dir, exist_ok=True)

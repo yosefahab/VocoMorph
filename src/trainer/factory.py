@@ -31,18 +31,19 @@ def create_instance(cls: type, config: Dict[str, Any], target: Any = None) -> An
 def get_instances(
     category: str,
     lib_check: type,
-    instance_creator: Callable[[type, Dict[str, Any]], Any],
+    instance_creator: Callable[[type, Dict[str, Any], Any], Any],
     config_list: List[Dict[str, Any]],
-) -> List[Any]:
+    target: Any = None,
+) -> Dict[str, Any]:
     return {
         entry["name"]: instance_creator(
-            load_class(category, lib_check, entry["name"]), entry
+            load_class(category, lib_check, entry["name"]), entry, target
         )
         for entry in config_list
     }
 
 
-def get_criterions(config: Dict[str, Any]) -> List[Any]:
+def get_criterions(config: Dict[str, Any]) -> Dict[str, Any]:
     return get_instances(
         "criterions",
         torch.nn,
@@ -51,110 +52,43 @@ def get_criterions(config: Dict[str, Any]) -> List[Any]:
     )
 
 
-def get_optimizers(
-    config: Dict[str, Any], parameters: Iterable[torch.nn.Parameter]
-) -> List[torch.optim.Optimizer]:
-    return [
-        create_instance(
-            load_class("optimizers", torch.optim, entry["name"]),
-            entry,
-            parameters,
+def get_optimizers_and_schedulers(
+    config: List[Dict[str, Any]], parameters: Iterable[torch.nn.Parameter]
+) -> List[Dict[str, Any]]:
+    """
+    Creates optimizer instances and their associated scheduler instances.
+
+    Args:
+        config: A list of dictionaries, where each dictionary defines an optimizer
+                and optionally its scheduler.
+        parameters: The model parameters to optimize.
+
+    Returns:
+        A list of dictionaries, each containing 'optimizer' and an optional 'scheduler' key.
+    """
+    optimizer_scheduler_pairs = []
+    for entry in config:
+        optimizer_name = entry["name"]
+        optimizer_cls = load_class("optimizers", torch.optim, optimizer_name)
+        optimizer_params = entry.get("params", {})
+
+        optimizer = optimizer_cls(parameters, **optimizer_params)
+        scheduler = None
+
+        scheduler_config = entry.get("scheduler")
+        if scheduler_config:
+            scheduler_name = scheduler_config["name"]
+            scheduler_cls = load_class(
+                "schedulers", torch.optim.lr_scheduler, scheduler_name
+            )
+            scheduler_params = scheduler_config.get("params", {})
+            scheduler = scheduler_cls(optimizer, **scheduler_params)
+
+        optimizer_scheduler_pairs.append(
+            {"optimizer": optimizer, "scheduler": scheduler}
         )
-        for entry in config
-    ]
-
-
-def get_schedulers(
-    config: Dict[str, Any], optimizers: List[torch.optim.Optimizer]
-) -> List[Any]:
-    if len(optimizers) == 1 and len(config) > 1:
-        optimizers = optimizers * len(config)
-
-    return [
-        create_instance(
-            load_class("schedulers", torch.optim.lr_scheduler, entry["name"]),
-            entry,
-            optimizer,
-        )
-        for entry, optimizer in zip(config, optimizers)
-    ]
+    return optimizer_scheduler_pairs
 
 
 def get_metrics(config: Dict[str, Any]) -> Dict[str, metrics.Metric]:
-    return {
-        entry["name"]: create_instance(
-            load_class("metrics", metrics, entry["name"]), entry
-        )
-        for entry in config
-    }
-
-
-# def create_instance(
-#     cls: type, name: str, config: Dict[str, Any], target: Any = None
-# ) -> Any:
-#     """Create an instance of a class with arguments from config."""
-#     arg_dict: Dict[str, Any] = config.get(name, {})
-#     return cls(target, **arg_dict) if target else cls(**arg_dict)
-#
-#
-# def get_instances(
-#     category: str,
-#     lib_check: type,
-#     instance_creator: Callable[[type, str], Any],
-#     config: Dict[str, Any],
-# ) -> List[Any]:
-#     """Create a list of instances from a given category."""
-#     return [
-#         instance_creator(load_class(category, lib_check, name), name)
-#         for name in config["name"]
-#     ]
-#
-#
-#
-# def get_criterions(config: Dict[str, Any]) -> List[Any]:
-#     """Create a list of criterion instances (loss functions)."""
-#     return get_instances(
-#         "criterions",
-#         torch.nn,
-#         lambda cls, name: create_instance(cls, name, config),
-#         config,
-#     )
-#
-#
-#
-# def get_optimizers(
-#     config: Dict[str, Any], parameters: Iterable[torch.nn.Parameter]
-# ) -> List[torch.optim.Optimizer]:
-#     """Create a list of optimizer instances."""
-#     return get_instances(
-#         "optimizers",
-#         torch.optim,
-#         lambda cls, name: create_instance(cls, name, config, parameters),
-#         config,
-#     )
-#
-#
-# def get_schedulers(
-#     config: Dict[str, Any], optimizers: List[torch.optim.Optimizer]
-# ) -> List[Any]:
-#     """Create a list of learning rate schedulers."""
-#     if len(optimizers) == 1 and len(config["name"]) > 1:
-#         optimizers = optimizers * len(config["name"])
-#
-#     return [
-#         create_instance(
-#             load_class("schedulers", torch.optim.lr_scheduler, name),
-#             name,
-#             config,
-#             optimizer,
-#         )
-#         for name, optimizer in zip(config["name"], optimizers)
-#     ]
-#
-#
-# def get_metrics(config: Dict[str, Any]) -> Dict[str, metrics.Metric]:
-#     """Return a dictionary of metric names to metric class instances."""
-#     return {
-#         name: create_instance(load_class("metrics", metrics, name), name, config)
-#         for name in config["name"]
-#     }
+    return get_instances("metrics", metrics, create_instance, config)
