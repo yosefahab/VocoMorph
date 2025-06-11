@@ -16,12 +16,13 @@ class ConvBlock(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.relu = nn.ReLU(inplace=True)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2) if apply_pool else None
+        self.pool = (
+            nn.MaxPool1d(kernel_size=2, stride=2) if apply_pool else nn.Identity()
+        )
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        if self.pool:
-            x = self.pool(x)
+        x = self.pool(x)
         return x

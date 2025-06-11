@@ -100,4 +100,4 @@ def generate_noise(
         brown = np.cumsum(np.random.normal(0, 1, shape))
         noise = brown / np.max(np.abs(brown))  # normalize to keep levels consistent
 
-    return (noise * noise_level).astype(dtype)  # pyright: ignore
+    return (noise * noise_level).astype(dtype)

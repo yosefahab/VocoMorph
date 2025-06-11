@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .modules.stft import STFT
 from .modules.decoder import Decoder
@@ -8,10 +7,14 @@ from .modules.encoder import Encoder
 from .modules.effect_encoder import EffectEncoder
 
 
-class VocoMorphUnet(nn.Module):
+class VocoMorphUnetSTFT(nn.Module):
     def __init__(self, config: dict):
         super().__init__()
+
         self.chunk_size = config["chunk_size"]
+        window = torch.hann_window(self.chunk_size)
+        self.register_buffer("window", window.view(1, 1, -1))
+
         self.overlap = config["overlap"]
         self.stride = self.chunk_size - self.overlap
 
@@ -23,9 +26,9 @@ class VocoMorphUnet(nn.Module):
         kernel_size = config["kernel_size"]
         padding = config["padding"]
 
-        assert len(encoder_filters) == len(
-            decoder_filters
-        ), "Number of Encoder and Decoder blocks must match"
+        assert len(encoder_filters) == len(decoder_filters), (
+            "Number of Encoder and Decoder blocks must match"
+        )
 
         self.stft = STFT(config["module_stft"])
         self.effect_encoder = EffectEncoder(config["num_effects"], embedding_dim)
@@ -70,8 +73,6 @@ class VocoMorphUnet(nn.Module):
 
         self.final_conv = nn.Conv2d(decoder_filters[-1], num_channels, kernel_size=1)
 
-        self.num_downsampling_steps = len(encoder_filters)
-
     def forward(self, x):
         effect_id, audio = x
         _, _, T = audio.shape
@@ -81,6 +82,7 @@ class VocoMorphUnet(nn.Module):
 
         # pre-compute scale & shift once
         output = torch.zeros_like(audio)
+        overlap_count = torch.zeros_like(audio)
         for i in range(0, T, self.stride):
             end_idx = min(T, i + self.chunk_size)
             chunk = audio[:, :, i:end_idx]
@@ -90,94 +92,54 @@ class VocoMorphUnet(nn.Module):
                 pad = self.chunk_size - chunk.shape[-1]
                 chunk = nn.functional.pad(chunk, (0, pad))
 
-            # convert audio to spectrogram
-            chunk_stft = self.stft.stft(chunk)
-
-            # get the magnitude component
-            magnitude = torch.abs(chunk_stft)
-            # get the phase component
-            phase = torch.angle(chunk_stft)
-
-            # pass through unet
-            magnitude = self.forward_one(magnitude, effect_embedding)
-
-            # reconstruct audio using modulated magnitude & original phase
-            real = magnitude * torch.cos(phase)
-            imag = magnitude * torch.sin(phase)
-            modulated_complex = torch.complex(real, imag)
-
-            # convert spectrogram back into audio
-            chunk_audio = self.stft.istft(modulated_complex)
+            chunk_audio = self.forward_one(chunk, effect_embedding)
 
             # overlap add
             output[:, :, i:end_idx] += chunk_audio[:, :, : end_idx - i]
+
+            window = self.window[..., : end_idx - i]
+            output[:, :, i:end_idx] += (
+                chunk_audio[:, :, : end_idx - i] * window[..., : end_idx - i]
+            )
+            overlap_count[:, :, i:end_idx] += window
+
+        output /= overlap_count.clamp(min=1e-6)
         return output
 
-    def pad_spectrogram_for_unet(self, spectrogram):
-        """
-        Pads the spectrogram to ensure its height and width are divisible by 2^N,
-        where N is the number of downsampling steps in the U-Net.
-        Returns the padded spectrogram and the original height/width for cropping later.
-        """
-        original_h, original_w = spectrogram.shape[-2:]
-        divisible_by = 2**self.num_downsampling_steps
+    def forward_one(self, chunk, effect_embedding):
+        # convert audio to spectrogram
+        chunk_stft = self.stft.stft(chunk)
 
-        # calculate target dimensions
-        target_h = ((original_h + divisible_by - 1) // divisible_by) * divisible_by
-        target_w = ((original_w + divisible_by - 1) // divisible_by) * divisible_by
+        # get the magnitude component
+        magnitude = torch.abs(chunk_stft)
+        # get the phase component
+        phase = torch.angle(chunk_stft)
 
-        # calculate padding amounts for height and width
-        pad_h = target_h - original_h
-        pad_w = target_w - original_w
-
-        # pad on the right and bottom sides. 'reflect' mode is often good for image-like data.
-        # (pad_left, pad_right, pad_top, pad_bottom)
-        padded_spectrogram = F.pad(spectrogram, (0, pad_w, 0, pad_h), mode="reflect")
-
-        return padded_spectrogram, original_h, original_w
-
-    def forward_one(self, spectrogram, effect_embedding):
-        """
-        Performs a single forward pass through the U-Net for one spectrogram chunk.
-        Handles padding the input spectrogram and cropping the output spectrogram.
-        """
-        # store the original spectrogram shape for later cropping
-        original_spectrogram_shape = spectrogram.shape
-
-        # pad the spectrogram to make its dimensions divisible by 2^N
-        x, original_h, original_w = self.pad_spectrogram_for_unet(spectrogram)
-
+        # pass through unet
+        x = magnitude
         # assert that the padded dimensions are indeed divisible
-        assert (
-            x.shape[-2] % (2**self.num_downsampling_steps) == 0
-        ), f"Padded height {x.shape[-2]} is not divisible by 2^{self.num_downsampling_steps}"
-        assert (
-            x.shape[-1] % (2**self.num_downsampling_steps) == 0
-        ), f"Padded width {x.shape[-1]} is not divisible by 2^{self.num_downsampling_steps}"
+        assert x.shape[-1] * x.shape[-2] % (2 ** len(self.encoder_blocks)) == 0, (
+            f"input shape {x.shape} is not divisible by 2^{len(self.encoder_blocks)}"
+        )
 
         skip_connections = []
+        for encoder in self.encoder_blocks:
+            x, skip = encoder(x, effect_embedding)
+            skip_connections.append(skip)
 
-        for i, block in enumerate(self.encoder_blocks):
-            x_post_pool, x_pre_pool = block(x, effect_embedding)
-            # store the pre-pooled output for skip connection
-            skip_connections.append(x_pre_pool)
-            x = x_post_pool
+        for bottleneck in self.bottleneck_blocks:
+            x, _ = bottleneck(x, effect_embedding)
 
-        for i, block in enumerate(self.bottleneck_blocks):
-            # unpack, but discard the 'pre-pool' from bottleneck
-            x, _ = block(x, effect_embedding)
-
-        # iterate through decoder blocks, using skip connections in reverse order
-        for i, block in enumerate(self.decoder_blocks):
-            # skip_connections[-1 - i] correctly gets the corresponding skip connection
-            x = block(x, skip_connections[-1 - i], effect_embedding)
+        for decoder, skip in zip(self.decoder_blocks, reversed(skip_connections)):
+            x = decoder(x, skip, effect_embedding)
 
         x = self.final_conv(x)
 
-        # crop the output back to the original spectrogram dimensions
-        x = x[:, :, :original_h, :original_w]
+        # reconstruct audio using modulated magnitude & original phase
+        real = x * torch.cos(phase)
+        imag = x * torch.sin(phase)
+        modulated_complex = torch.complex(real, imag)
 
-        assert (
-            x.shape == original_spectrogram_shape
-        ), f"Output shape {x.shape} does not match original input spectrogram shape {original_spectrogram_shape}"
-        return x
+        # convert spectrogram back into audio
+        chunk_audio = self.stft.istft(modulated_complex)
+        return chunk_audio

@@ -1,11 +1,10 @@
-experiment: "VocoMorphUnet"
-notes: "Neural Vocal Modulator V1.
-   TCN (Temporal Convolutional Network) backbone & FiLM (Feature-wise Linear Modulation)
-   layers are used to condition an audio on an Embedding Vector
-   Input height and width to the U-Net must be divisible by 2^(num_blocks).
-   If not, upsampling won't restore original size.
-   "
-# ------------------------------------------------------------------------------------------------------------------------------ #
+experiment: "VocoMorphUnetSTFT"
+notes: "Neural Vocal Modulator V3.1
+  UNet & FiLM (Feature-wise Linear Modulation) layers
+  are used to condition an audio on an Embedding Vector.
+  Input is STFT, (length * width) must be divisible by 2^number of unet blocks.
+  otherwise upsampling won't restore original size.
+  "
 config:
   # ------------------------------------------------------------ #
   seed: 13
@@ -18,14 +17,12 @@ config:
     channels: &var_num_channels 1 # mono/stereo
     sample_rate: &var_sample_rate 16000
     n_mels: &var_n_mels 80
-    n_fft: &var_n_fft 512
-    win_length: &var_win_length 512
-    hop_length: &var_hop_length 128
+    n_fft: &var_n_fft 1024
+    win_length: &var_win_length 1024
+    hop_length: &var_hop_length 256
 
-    # frame_length N_frames * hop_length + n_fft - hop_length.
-    # 8 * 128 + 512 - 128
     # the chunk of audio the model processes at a time
-    frame_length: &var_frame_length 1408 # 8 frames
+    frame_length: &var_frame_length 33536 # 4096 # 256 ms at 16k
     # max audio length during training
     max_length: 160000 # 10 sec at 16k sr, -1 if you dont want to trim
 
@@ -33,16 +30,17 @@ config:
 
     datalists:
       train:
-        batch_size: 16
+        batch_size: 8
         path: "data/metadata/timit_train.csv"
       valid:
-        batch_size: 16
+        batch_size: 8
         path: "data/metadata/timit_valid.csv"
-      test: 
+      test:
         batch_size: 1
         path: "data/metadata/timit_test.csv"
 
-    effects: [
+    effects:
+      [
         "identity_transform",
         "apply_pitch_shift",
         "apply_radio_effect",
@@ -51,100 +49,102 @@ config:
       ]
   # ------------------------------------------------------------ #
   model:
-      num_channels: *var_num_channels
-      chunk_size: *var_frame_length
-      overlap: 0
-      embedding_dim: 32
-      num_effects: 5
-      encoder_filters: [32, 64, 128]
-      bottleneck_filters: [256]
-      decoder_filters: [128, 64, 32]
-      kernel_size: [3,3]
-      padding: 1
-  
-      module_stft:
-        output_length: *var_frame_length
-        n_fft: *var_n_fft
-        hop_length: *var_hop_length
-        win_length: *var_win_length
+    num_channels: *var_num_channels
+    chunk_size: *var_frame_length
+    overlap: 0
+    embedding_dim: 32
+    num_effects: 5
+    encoder_filters: [32, 64, 128, 256, 512] # 5 levels
+    bottleneck_filters: [1024, 1024]
+    decoder_filters: [512, 256, 128, 64, 32] # 5 levels
+    kernel_size: [3, 3]
+    padding: 1
 
+    module_stft:
+      n_fft: *var_n_fft
+      hop_length: *var_hop_length
+      win_length: *var_win_length
+      output_length: *var_frame_length
   # ------------------------------------------------------------ #
   # loss functions
   criterions:
-    name: [
-        # "STFTLoss",
-        "MultiResolutionSTFTLoss",
-        # "VocalModulationLoss",
-      ]
+    - name: "EnergyLoss"
+      weight: 10.0
 
-    STFTLoss:
-      alpha: 0.5
-      beta: 0.5
-      n_fft: *var_n_fft
-      hop_length: *var_hop_length
-      win_length: *var_win_length
+    - name: "MSELoss"
+      weight: 1.0
 
-    MultiResolutionSTFTLoss:
-      alpha: 0.5
-      beta: 0.5
-      # n_fft, hop_length, win_length
-      resolutions: [
-      # Good frequency resolution, medium time resolution
-          [1024, 1024, 256], 
-      # Excellent frequency resolution, poor time resolution
-          [2048, 2048, 512], 
-      # Moderate frequency resolution, good time resolution
-          [512, 512, 128], 
+    - name: "SI_SNRLoss"
+      weight: 1.0
+
+    - name: "MultiResolutionSTFTLoss"
+      weight: 1.0
+      params:
+        alpha: 1.0
+        beta: 0.5
+        resolutions: [
+        # Good frequency resolution, medium time resolution
+            [1024, 1024, 256],
+        # Excellent frequency resolution, poor time resolution
+            [2048, 2048, 512],
+        # Moderate frequency resolution, good time resolution
+            [512, 512, 128],
         ]
-    MelSpecLoss:
-      alpha: 0.5
-      beta: 0.5
-      sample_rate: *var_sample_rate
-      n_mels: *var_n_mels
-      n_fft: *var_n_fft
-      hop_length: *var_hop_length
-      win_length: *var_win_length
-
-    VocalModulationLoss:
-      alpha: 0.3
-      beta: 0.3
-      gamma: 0.3
-      sample_rate: *var_sample_rate
-      n_mels: *var_n_mels
-      n_fft: *var_n_fft
-      hop_length: *var_hop_length
-      win_length: *var_win_length
+    #
+    # - name: "STFTLoss"
+    #   weight: 0.5
+    #   params:
+    #     alpha: 0.5
+    #     beta: 0.5
+    #     n_fft: *var_n_fft
+    #     hop_length: *var_hop_length
+    #     win_length: *var_win_length
+    #
+    # - name: "VocalModulationLoss"
+    #   weight: 0.7
+    #   params:
+    #     alpha: 0.5
+    #     beta: 0.2
+    #     gamma: 0.1
+    #     delta: 1.0
+    #     sample_rate: *var_sample_rate
+    #     n_mels: *var_n_mels
+    #     n_fft: *var_n_fft
+    #     hop_length: *var_hop_length
+    #     win_length: *var_win_length
+    #
   # ------------------------------------------------------------ #
   optimizers:
-    name: ["AdamW"]
-    AdamW:
-      lr: 0.001 #1.0e-3
-      weight_decay: 0.0001 #1.0e-4
+    - name: "AdamW"
+      params:
+        lr: 5.0e-5
+        betas: [0.9, 0.999]
+        weight_decay: 1.0e-5
+      scheduler:
+        name: "ReduceLROnPlateau"
+        params:
+          mode: "min"
+          min_lr: 1.0e-10
+          factor: 0.8
+          patience: 2
+        # name: "WarmupConstantSchedule"
+        #   params:
+        #     warmup_steps: 1000
   # ------------------------------------------------------------ #
-  # LR scheduler
-  schedulers:
-    name: ["ReduceLROnPlateau"]
-    ReduceLROnPlateau:
-      mode: "min"
-      min_lr: 1.0e-10
-      factor: 0.8
-      patience: 2
-    WarmupConstantSchedule:
-      warmup_steps: 1000
-    # ------------------------------------------------------------ #
   # metrics to evaluate the model on
-  metrics:
-    name: ["MeanSquaredError"]
+  metrics: []
   # ------------------------------------------------------------ #
   trainer:
     max_epoch: 100
     gpuid: [0]
     clip_norm: 5
-    start_scheduling: 50
+    start_scheduling: 1
     test_epochs: [20, 50, 100]
     precision: "fp16"
+    grad_accumulation_steps: 4
 
   checkpointer:
     save_interval: 5 # num epochs to save checkpoint
     save_best: true
-    keep_last_n: null # false or int
+    keep_last_n: false # false or int
+    checkpoint_path: null # checkpoint to load or start from

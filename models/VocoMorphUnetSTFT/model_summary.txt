@@ -1,7 +1,7 @@
 ======================================================================
 Layer (type:depth-idx)                        Param #
 ======================================================================
-VocoMorphUnet                                 --
+VocoMorphUnetSTFT                             --
 ├─STFT: 1-1                                   --
 ├─EffectEncoder: 1-2                          --
 │    └─Embedding: 2-1                         160
@@ -18,24 +18,42 @@ VocoMorphUnet                                 --
 │    │    └─ConvBlock: 3-7                    74,112
 │    │    └─FiLM: 3-8                         8,448
 │    │    └─MaxPool2d: 3-9                    --
-├─ModuleList: 1-4                             --
 │    └─Encoder: 2-5                           --
 │    │    └─ConvBlock: 3-10                   295,680
 │    │    └─FiLM: 3-11                        16,896
-│    │    └─Identity: 3-12                    --
+│    │    └─MaxPool2d: 3-12                   --
+│    └─Encoder: 2-6                           --
+│    │    └─ConvBlock: 3-13                   1,181,184
+│    │    └─FiLM: 3-14                        33,792
+│    │    └─MaxPool2d: 3-15                   --
+├─ModuleList: 1-4                             --
+│    └─Encoder: 2-7                           --
+│    │    └─ConvBlock: 3-16                   4,721,664
+│    │    └─FiLM: 3-17                        67,584
+│    │    └─Identity: 3-18                    --
+│    └─Encoder: 2-8                           --
+│    │    └─ConvBlock: 3-19                   9,440,256
+│    │    └─FiLM: 3-20                        67,584
+│    │    └─Identity: 3-21                    --
 ├─ModuleList: 1-5                             --
-│    └─Decoder: 2-6                           --
-│    │    └─DeconvBlock: 3-13                 426,496
-│    │    └─FiLM: 3-14                        8,448
-│    └─Decoder: 2-7                           --
-│    │    └─DeconvBlock: 3-15                 106,752
-│    │    └─FiLM: 3-16                        4,224
-│    └─Decoder: 2-8                           --
-│    │    └─DeconvBlock: 3-17                 26,752
-│    │    └─FiLM: 3-18                        2,112
+│    └─Decoder: 2-9                           --
+│    │    └─DeconvBlock: 3-22                 6,817,792
+│    │    └─FiLM: 3-23                        33,792
+│    └─Decoder: 2-10                          --
+│    │    └─DeconvBlock: 3-24                 1,704,960
+│    │    └─FiLM: 3-25                        16,896
+│    └─Decoder: 2-11                          --
+│    │    └─DeconvBlock: 3-26                 426,496
+│    │    └─FiLM: 3-27                        8,448
+│    └─Decoder: 2-12                          --
+│    │    └─DeconvBlock: 3-28                 106,752
+│    │    └─FiLM: 3-29                        4,224
+│    └─Decoder: 2-13                          --
+│    │    └─DeconvBlock: 3-30                 26,752
+│    │    └─FiLM: 3-31                        2,112
 ├─Conv2d: 1-6                                 33
 ======================================================================
-Total params: 995,457
-Trainable params: 995,457
+Total params: 25,080,961
+Trainable params: 25,080,961
 Non-trainable params: 0
 ======================================================================

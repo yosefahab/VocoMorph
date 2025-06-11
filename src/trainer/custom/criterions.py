@@ -174,6 +174,7 @@ class SI_SNRLoss:
 
         dot = torch.sum(preds * targets, dim=-1, keepdim=True)
         target_energy = torch.sum(targets**2, dim=-1, keepdim=True) + self.eps
+
         scale = dot / target_energy
         projection = scale * targets
 
@@ -191,6 +192,5 @@ class EnergyLoss:
     def __call__(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         output_energy = torch.mean(logits**2, dim=-1)
         target_energy = torch.mean(targets**2, dim=-1)
-        # MSE usually better for energy
         energy_loss = F.mse_loss(output_energy, target_energy, reduction="mean")
         return energy_loss

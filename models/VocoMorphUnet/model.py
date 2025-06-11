@@ -9,6 +9,7 @@ from .modules.effect_encoder import EffectEncoder
 class VocoMorphUnet(nn.Module):
     def __init__(self, config: dict):
         super().__init__()
+
         self.chunk_size = config["chunk_size"]
         window = torch.hann_window(self.chunk_size)
         self.register_buffer("window", window.view(1, 1, -1))
