@@ -1,9 +1,8 @@
-experiment: "VocoMorphUnet"
-notes: "Neural Vocal Modulator V2.0
-  UNet & FiLM (Feature-wise Linear Modulation) layers
+experiment: "VocoMorphTransformerSTFT"
+notes: "Neural Vocal Modulator V3.1
+  Vision Transformer & FiLM (Feature-wise Linear Modulation) layers
   are used to condition an audio on an Embedding Vector.
-  Input is raw audio, length must be divisible by 2^number of unet blocks.
-  otherwise upsampling won't restore original size.
+  Input is STFT
   "
 # ------------------------------------------------------------------------------------------------------------------------------ #
 config:
@@ -23,11 +22,9 @@ config:
     hop_length: &var_hop_length 256
 
     # the chunk of audio the model processes at a time
-    frame_length: &var_frame_length 4096 # 256 ms at 16k
+    frame_length: &var_frame_length 33536 # 4096 # 256 ms at 16k
     # max audio length during training
-    max_length: 80000 # 10 sec at 16k sr, -1 if you dont want to trim
-
-    dataset: "timit"
+    max_length: 160000 # 10 sec at 16k sr, -1 if you dont want to trim
 
     datalists:
       train:
@@ -58,19 +55,25 @@ config:
     encoder_filters: [32, 64, 128, 256, 512] # 5 levels
     bottleneck_filters: [1024, 1024]
     decoder_filters: [512, 256, 128, 64, 32] # 5 levels
-    kernel_size: 3
+    kernel_size: [3, 3]
     padding: 1
+
+    module_stft:
+      n_fft: *var_n_fft
+      hop_length: *var_hop_length
+      win_length: *var_win_length
+      output_length: *var_frame_length
   # ------------------------------------------------------------ #
   # loss functions
   criterions:
-    # - name: "EnergyLoss"
-    #   weight: 10.0
+    - name: "EnergyLoss"
+      weight: 10.0
 
     - name: "MSELoss"
       weight: 1.0
 
     - name: "SI_SNRLoss"
-      weight: 0.5
+      weight: 1.0
 
     - name: "MultiResolutionSTFTLoss"
       weight: 1.0
@@ -134,7 +137,7 @@ config:
     gpuid: [0]
     clip_norm: 5
     start_scheduling: 1
-    test_epochs: [1, 10, 25, 50, 75, 100]
+    test_epochs: [20, 50, 100]
     precision: "fp16"
     grad_accumulation_steps: 4
 

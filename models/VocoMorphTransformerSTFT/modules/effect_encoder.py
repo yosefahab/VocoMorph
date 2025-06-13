@@ -2,10 +2,10 @@ import torch.nn as nn
 
 
 class EffectEncoder(nn.Module):
-    def __init__(self, config: dict):
+    def __init__(self, num_effects, embedding_dim):
         super().__init__()
-        self.num_effects = len(config["effects"])
-        self.embedding_dim = config["embedding_dim"]
+        self.num_effects = num_effects
+        self.embedding_dim = embedding_dim
         self.embedding = nn.Embedding(self.num_effects, self.embedding_dim)
 
     def forward(self, effect_id):
