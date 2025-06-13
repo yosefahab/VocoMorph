@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Optional, Tuple
 
 from src.logging.logger import get_logger
@@ -30,7 +30,7 @@ def create_split_csv(dataset_dir: str, output_csv: str):
     audio_files = []
     for root, _, files in os.walk(dataset_dir):
         for file in files:
-            if file.lower().endswith(".wav"):
+            if file.lower().endswith(".wav") or file.lower().endswith(".flac"):
                 audio_files.append(
                     {"ID": f"{id:07}", "raw_wav_path": os.path.join(root, file)}
                 )
@@ -85,7 +85,8 @@ def apply_effects(audio: np.ndarray, sr: int, effects: List[str]):
 def _augment_wav(args: Tuple[pd.Series, int, str, List[str]]):
     """Helper function to process a single row for parallel execution."""
     row, sr, output_dir, effects = args
-    wav_id = str(row["ID"]).zfill(7)
+    # wav_id = str(row["ID"]).zfill(7)
+    wav_id = row["ID"]
     raw_wav_path = str(row["raw_wav_path"])
 
     raw_wave, _ = load_audio(raw_wav_path, sr)
@@ -132,16 +133,15 @@ def augment_files(
 
     os.makedirs(output_dir, exist_ok=True)
 
-    def generate_augmentation_args(
-        df: pd.DataFrame, sr: int, output_dir: str, effects: List[str]
-    ):
-        """Generates arguments for _augment_wav on demand."""
-        for _, row in df.iterrows():
-            yield (row, sr, output_dir, effects)
-
-    with Pool() as p:
-        args_generator = generate_augmentation_args(df, sr, output_dir, effects)
-        results = list(tqdm(p.imap(_augment_wav, args_generator), total=len(df)))
+    num_workers = max(1, int(os.cpu_count() or 1 * 0.8))
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        futures = [
+            executor.submit(_augment_wav, (row, sr, output_dir, effects))
+            for _, row in df.iterrows()
+        ]
+        results = []
+        for future in tqdm(as_completed(futures), total=len(futures)):
+            results.append(future.result())
 
     df_processed = pd.DataFrame([item for sublist in results for item in sublist])
 

@@ -17,6 +17,12 @@ LIBRISPEECH_URLS = {
     "test-clean": "http://www.openslr.org/resources/12/test-clean.tar.gz",
     "test-other": "http://www.openslr.org/resources/12/test-other.tar.gz",
 }
+LIBRISPEECH_SUBSET_TO_DIR = {
+    "train-clean-100": "train",
+    "dev-clean": "valid",
+    "test-clean": "test",
+}
+
 
 TIMIT_URL = "https://figshare.com/ndownloader/files/10256148"
 
@@ -33,7 +39,7 @@ def download_file(url: str, dest_path: str) -> bool:
         logger.info(f"Downloaded {dest_path}")
         return True
     except requests.RequestException as e:
-        logger.error(f"Failed to download {url}: {e}")
+        logger.exception(f"Failed to download {url}: {e}")
         return False
 
 
@@ -62,29 +68,63 @@ def extract_zipfile(zip_path: str, extract_path: str) -> bool:
         return False
 
 
-def download_librispeech(subset: str, destination_dir: str, remove_tar: bool = True):
-    """Downloads and extracts a LibriSpeech dataset subset."""
+def download_librispeech_subset(
+    subset: str, destination_dir: str, remove_tar: bool = True
+):
     if subset not in LIBRISPEECH_URLS:
         logger.error(f"Invalid dataset: {subset}")
         return False
-
-    dataset_dir = os.path.join(destination_dir, subset)
-    os.makedirs(dataset_dir, exist_ok=True)
 
     url = LIBRISPEECH_URLS[subset]
     tar_path = os.path.join(destination_dir, f"{subset}.tar.gz")
 
     if not download_file(url, tar_path):
         return False
-
     if not extract_tarfile(tar_path, destination_dir):
         return False
 
+    src_subset_dir = os.path.join(destination_dir, "LibriSpeech", subset)
+    dst_subset_dir = os.path.join(destination_dir, LIBRISPEECH_SUBSET_TO_DIR[subset])
+
+    # replace or skip if the subset is already there
+    if os.path.exists(dst_subset_dir):
+        shutil.rmtree(dst_subset_dir)
+    shutil.move(src_subset_dir, dst_subset_dir)
+
+    lib_dir = os.path.join(destination_dir, "LibriSpeech")
+
+    # move shared .TXT files
+    for file in os.listdir(lib_dir):
+        file_path = os.path.join(lib_dir, file)
+        if file.lower().endswith(".txt") and os.path.isfile(file_path):
+            shutil.move(file_path, os.path.join(destination_dir, file))
+
+    # remove LibriSpeech if empty after move
+    if not os.listdir(lib_dir):
+        os.rmdir(lib_dir)
+
     if remove_tar:
         os.remove(tar_path)
-        logger.info(f"Removed {tar_path}")
-
     return True
+
+
+def download_librispeech(destination_dir: str):
+    subsets = ["train-clean-100", "dev-clean", "test-clean"]
+    with ThreadPoolExecutor(max_workers=len(subsets)) as executor:
+        future_to_subset = {
+            executor.submit(
+                download_librispeech_subset, subset, destination_dir
+            ): subset
+            for subset in subsets
+        }
+        for future in as_completed(future_to_subset):
+            subset = future_to_subset[future]
+            try:
+                success = future.result()
+                if not success:
+                    logger.error(f"Failed to download {subset}")
+            except Exception as e:
+                logger.exception(f"Exception while downloading {subset}: {e}")
 
 
 def download_timit(destination_dir: str, remove_zip: bool = True) -> bool:
@@ -123,25 +163,10 @@ def main(dataset: str):
         logger.info("Dataset already downloaded")
         return
 
-    os.makedirs(destination_dir, exist_ok=True)
     logger.info(f"Downloading dataset: {dataset}.")
+    os.makedirs(destination_dir, exist_ok=True)
     if dataset == "librispeech":
-        subsets = ["train-clean-100", "dev-clean", "test-clean"]
-        with ThreadPoolExecutor(max_workers=len(subsets)) as executor:
-            future_to_subset = {
-                executor.submit(download_librispeech, subset, destination_dir): subset
-                for subset in subsets
-            }
-
-            for future in as_completed(future_to_subset):
-                subset = future_to_subset[future]
-                try:
-                    success = future.result()
-                    if not success:
-                        logger.error(f"Failed to download {subset}")
-                except Exception as e:
-                    logger.error(f"Exception while downloading {subset}: {e}")
-
+        download_librispeech(destination_dir)
     elif dataset == "timit":
         download_timit(destination_dir)
 
