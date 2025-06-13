@@ -1,5 +1,9 @@
 experiment: "VocoMorphRNN"
-notes: ""
+notes: "Neural Vocal Modulator V1.0
+  RNN & FiLM (Feature-wise Linear Modulation) layers
+  are used to condition an audio on an Embedding Vector.
+  Input is raw audio
+  "
 # ------------------------------------------------------------------------------------------------------------------------------ #
 config:
   # ------------------------------------------------------------ #
@@ -20,8 +24,6 @@ config:
     # the chunk of audio the model processes at a time
     frame_length: &var_frame_length 800 # 50ms at 16k
     max_length: 160_000 # 10 sec at 16k sr
-
-    dataset: "timit"
 
     datalists:
       train:
@@ -65,76 +67,83 @@ config:
   # ------------------------------------------------------------ #
   # loss functions
   criterions:
-    name: [
-        # "L1Loss",
-        # "MSELoss",
-        "STFTLoss",
-        # "MultiResolutionSTFTLoss",
-        # "VocalModulationLoss",
-      ]
-    STFTLoss:
-      n_fft: *var_n_fft
-      hop_length: *var_hop_length
-      win_length: *var_win_length
-    MultiResolutionSTFTLoss:
-      alpha: 0.5
-      beta: 0.5
-      # n_fft, hop_length, win_length
-      resolutions: [
-      # Good frequency resolution, medium time resolution
-          [1024, 1024, 256], 
-      # Excellent frequency resolution, poor time resolution
-          [2048, 2048, 512], 
-      # Moderate frequency resolution, good time resolution
-          [512, 512, 128], 
-        ]
-    MelSpecLoss:
-      alpha: 0.5
-      beta: 0.5
-      sample_rate: *var_sample_rate
-      n_mels: *var_n_mels
-      n_fft: *var_n_fft
-      hop_length: *var_hop_length
-      win_length: *var_win_length
+    # - name: "EnergyLoss"
+    #   weight: 10.0
 
-    VocalModulationLoss:
-      alpha: 0.3
-      beta: 0.3
-      gamma: 0.3
-      sample_rate: *var_sample_rate
-      n_mels: *var_n_mels
-      n_fft: *var_n_fft
-      hop_length: *var_hop_length
-      win_length: *var_win_length
+    - name: "MSELoss"
+      weight: 1.0
+
+    - name: "SI_SNRLoss"
+      weight: 0.5
+
+    - name: "MultiResolutionSTFTLoss"
+      weight: 1.0
+      params:
+        alpha: 1.0
+        beta: 0.5
+        resolutions: [
+        # Good frequency resolution, medium time resolution
+            [1024, 1024, 256],
+        # Excellent frequency resolution, poor time resolution
+            [2048, 2048, 512],
+        # Moderate frequency resolution, good time resolution
+            [512, 512, 128],
+        ]
+    #
+    # - name: "STFTLoss"
+    #   weight: 0.5
+    #   params:
+    #     alpha: 0.5
+    #     beta: 0.5
+    #     n_fft: *var_n_fft
+    #     hop_length: *var_hop_length
+    #     win_length: *var_win_length
+    #
+    # - name: "VocalModulationLoss"
+    #   weight: 0.7
+    #   params:
+    #     alpha: 0.5
+    #     beta: 0.2
+    #     gamma: 0.1
+    #     delta: 1.0
+    #     sample_rate: *var_sample_rate
+    #     n_mels: *var_n_mels
+    #     n_fft: *var_n_fft
+    #     hop_length: *var_hop_length
+    #     win_length: *var_win_length
+    #
   # ------------------------------------------------------------ #
   optimizers:
-    name: ["AdamW"]
-    AdamW:
-      lr: 1.0e-3
-      weight_decay: 1.0e-4
+    - name: "AdamW"
+      params:
+        lr: 5.0e-5
+        betas: [0.9, 0.999]
+        weight_decay: 1.0e-5
+      scheduler:
+        name: "ReduceLROnPlateau"
+        params:
+          mode: "min"
+          min_lr: 1.0e-10
+          factor: 0.8
+          patience: 2
+        # name: "WarmupConstantSchedule"
+        #   params:
+        #     warmup_steps: 1000
   # ------------------------------------------------------------ #
-  schedulers:
-    name: ["ReduceLROnPlateau", "WarmupConstantSchedule"]
-    ReduceLROnPlateau:
-      mode: "min"
-      min_lr: 1.0e-10
-      factor: 0.8
-      patience: 2
-    WarmupConstantSchedule:
-      warmup_steps: 1000
-    # ------------------------------------------------------------ #
-  metrics:
-    name: []
+  # metrics to evaluate the model on
+  metrics: []
   # ------------------------------------------------------------ #
   trainer:
     max_epoch: 100
     gpuid: [0]
     clip_norm: 5
-    start_scheduling: 50
-    test_epochs: [20, 50, 100]
+    start_scheduling: 1
+    test_epochs: [1, 10, 25, 50, 75, 100]
     precision: "fp16"
-  # ------------------------------------------------------------ #
+    grad_accumulation_steps: 4
+
   checkpointer:
     save_interval: 5 # num epochs to save checkpoint
     save_best: true
-    keep_last_n: null # false or int
+    keep_last_n: null # null or int
+    checkpoint_path: null # checkpoint to load or start from

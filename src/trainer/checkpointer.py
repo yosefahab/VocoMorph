@@ -42,7 +42,7 @@ class Checkpointer:
         self.save_interval = config.get("save_interval", 1)
         logger.info(f"Using save interval: {self.save_interval} for checkpointer")
 
-        self.keep_last_n = config.get("keep_last_n", False)
+        self.keep_last_n = config.get("keep_last_n", None)
         if self.keep_last_n:
             logger.info(f"Using keep last {self.keep_last_n} policy for checkpointer")
 
@@ -82,6 +82,13 @@ class Checkpointer:
             # remove old checkpoints if keep_last_n is set
             if self.keep_last_n:
                 self._cleanup_old_checkpoints()
+
+        else:
+            checkpoint_path = os.path.join(
+                self.checkpoint_dir, f"ckpt_epoch_{epoch}.pt"
+            )
+            logger.info(f"New checkpoint saved: {self.save_interval}")
+            self._save_to_disk(checkpoint_path, epoch)
 
     def _save_to_disk(self, checkpoint_path: str, epoch: int):
         """

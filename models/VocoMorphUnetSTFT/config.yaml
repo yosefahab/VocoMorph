@@ -1,10 +1,11 @@
 experiment: "VocoMorphUnetSTFT"
-notes: "Neural Vocal Modulator V3.1
+notes: "Neural Vocal Modulator V2.1
   UNet & FiLM (Feature-wise Linear Modulation) layers
   are used to condition an audio on an Embedding Vector.
   Input is STFT, (length * width) must be divisible by 2^number of unet blocks.
   otherwise upsampling won't restore original size.
   "
+# ------------------------------------------------------------------------------------------------------------------------------ #
 config:
   # ------------------------------------------------------------ #
   seed: 13
@@ -25,8 +26,6 @@ config:
     frame_length: &var_frame_length 33536 # 4096 # 256 ms at 16k
     # max audio length during training
     max_length: 160000 # 10 sec at 16k sr, -1 if you dont want to trim
-
-    dataset: "timit"
 
     datalists:
       train:
@@ -68,12 +67,12 @@ config:
   # ------------------------------------------------------------ #
   # loss functions
   criterions:
-    - name: "EnergyLoss"
-      weight: 10.0
-
-    - name: "MSELoss"
-      weight: 1.0
-
+    # - name: "EnergyLoss"
+    #   weight: 10.0
+    #
+    # - name: "MSELoss"
+    #   weight: 1.0
+    #
     - name: "SI_SNRLoss"
       weight: 1.0
 
@@ -146,5 +145,5 @@ config:
   checkpointer:
     save_interval: 5 # num epochs to save checkpoint
     save_best: true
-    keep_last_n: false # false or int
+    keep_last_n: null # null or int
     checkpoint_path: null # checkpoint to load or start from

@@ -312,8 +312,8 @@ class ModelTrainer:
 
         return {
             "Losses": {
-                "Total": avg_total_weighted_loss,
                 **avg_individual_weighted_losses,
+                "Total": avg_total_weighted_loss,
             },
             "Metrics": self.compute_metrics(),
         }
@@ -427,8 +427,8 @@ class ModelTrainer:
 
             return {
                 "Losses": {
-                    "Total": avg_total_weighted_loss,
                     **avg_individual_weighted_losses,
+                    "Total": avg_total_weighted_loss,
                 },
                 "Metrics": self.compute_metrics(),
             }

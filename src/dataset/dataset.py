@@ -111,10 +111,7 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
     Returns:
         dict containing dataloader for each split
     """
-    # create dataset object for each partition
-    dataset_name = config["dataset"]
-    logger.info(f"Loading dataset: {dataset_name}")
-
+    # create dataset object for each split
     collate_fn_partial = partial(collate_fn, max_length=config["max_length"])
     dataloaders = {}
     PROJECT_ROOT = os.environ["PROJECT_ROOT"]
