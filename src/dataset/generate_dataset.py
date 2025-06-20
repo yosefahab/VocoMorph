@@ -150,9 +150,9 @@ def augment_files(
 
 
 def create_splits(dataset: str):
-    project_root = os.environ["PROJECT_ROOT"]
-    metadata_dir = os.path.join(project_root, "data", "metadata")
-    dataset_dir = os.path.join(project_root, "data", dataset)
+    data_root = os.environ["DATA_ROOT"]
+    metadata_dir = os.path.join(data_root, "metadata")
+    dataset_dir = os.path.join(data_root, dataset)
     os.makedirs(metadata_dir, exist_ok=True)
 
     for split in ["train", "valid", "test"]:
@@ -170,9 +170,9 @@ def create_splits(dataset: str):
 
 
 def augment_dataset(dataset: str, config: dict):
-    project_root = os.environ["PROJECT_ROOT"]
-    metadata_dir = os.path.join(project_root, "data", "metadata")
-    output_dir = os.path.join(project_root, "data", dataset, "modulated")
+    data_root = os.environ["DATA_ROOT"]
+    metadata_dir = os.path.join(data_root, "metadata")
+    output_dir = os.path.join(data_root, dataset, "modulated")
     sr = config["sample_rate"]
     effects = config["effects"]
 

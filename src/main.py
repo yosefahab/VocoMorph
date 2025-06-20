@@ -35,9 +35,7 @@ def main(args: Namespace, config: dict):
         model.load_state_dict(checkpoint["model_state_dict"])
 
         output_filename = os.path.splitext(os.path.basename(args.sample_file))[0]
-        output_dir = os.path.join(
-            os.environ["PROJECT_ROOT"], "data", "output", output_filename
-        )
+        output_dir = os.path.join(os.environ["DATA_ROOT"], "output", output_filename)
         for i in range(len(config["data"]["effects"])):
             infer(i, args.sample_file, model, config, output_path=output_dir)
     else:

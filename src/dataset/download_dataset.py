@@ -158,7 +158,7 @@ def download_timit(destination_dir: str, remove_zip: bool = True) -> bool:
 
 def main(dataset: str):
     """Main function to download the requested dataset."""
-    destination_dir = os.path.join(os.environ["PROJECT_ROOT"], "data", dataset)
+    destination_dir = os.path.join(os.environ["DATA_ROOT"], dataset)
     if os.path.exists(destination_dir):
         logger.info("Dataset already downloaded")
         return

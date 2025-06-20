@@ -86,7 +86,7 @@ def save_audio(
 
     # set default output directory
     if output_dir is None:
-        output_dir = os.path.join(os.environ["PROJECT_ROOT"], "data", "output")
+        output_dir = os.path.join(os.environ["DATA_ROOT"], "output")
 
     # create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)

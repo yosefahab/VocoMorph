@@ -6,6 +6,10 @@ if os.environ.get("PROJECT_ROOT", None) is None:
     os.environ["PROJECT_ROOT"] = PROJECT_ROOT
     sys.path.append(PROJECT_ROOT)  # ensure src/ is accessible
 
+if os.environ.get("DATA_ROOT", None) is None:
+    DATA_ROOT = os.path.join(PROJECT_ROOT, "data")
+    os.environ["DATA_ROOT"] = DATA_ROOT
+
 import argparse
 from importlib import import_module
 from src.utils import parse_yaml

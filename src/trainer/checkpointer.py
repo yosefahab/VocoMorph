@@ -87,7 +87,6 @@ class Checkpointer:
             checkpoint_path = os.path.join(
                 self.checkpoint_dir, f"ckpt_epoch_{epoch}.pt"
             )
-            logger.info(f"New checkpoint saved: {self.save_interval}")
             self._save_to_disk(checkpoint_path, epoch)
 
     def _save_to_disk(self, checkpoint_path: str, epoch: int):
