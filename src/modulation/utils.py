@@ -1,13 +1,12 @@
-from torch import Tensor
 import importlib
-import librosa
-import numpy as np
-import matplotlib.pyplot as plt
 from typing import List, Tuple
 
+import librosa
+import matplotlib.pyplot as plt
+import numpy as np
+from torch import Tensor
 
-from src.logging.logger import get_logger
-
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

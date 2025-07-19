@@ -1,8 +1,8 @@
-import os
-from typing import List
 import logging
+import os
 from logging.handlers import RotatingFileHandler
-
+from pathlib import Path
+from typing import List
 
 # define color mappings for log levels
 # fmt: off
@@ -28,7 +28,7 @@ class ColorFormatter(logging.Formatter):
 
 
 def setup_logging(
-    log_dir: str,
+    log_dir: Path,
     log_level=logging.INFO,
     log_to_file=True,
     max_file_size=5 * 1024 * 1024,  # 5MB
@@ -43,7 +43,7 @@ def setup_logging(
         max_file_size: Max log file size in bytes before rotating (defaults to 5MB).
         backup_count: Number of backup log files to keep.
     """
-    os.makedirs(log_dir, exist_ok=True)
+    log_dir.mkdir(exist_ok=True)
 
     log_format = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
 
@@ -55,7 +55,7 @@ def setup_logging(
 
     if log_to_file:
         file_handler = RotatingFileHandler(
-            os.path.join(log_dir, "logs.log"),
+            log_dir.joinpath("logs.log"),
             maxBytes=max_file_size,
             backupCount=backup_count,
         )

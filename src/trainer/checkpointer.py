@@ -1,10 +1,11 @@
-import os
-import torch
 import glob
+import os
 from typing import Optional
-from src.logging.logger import get_logger
+from pathlib import Path
 
-logger = get_logger(__name__)
+import torch
+
+from src.utils.logger import get_logger
 
 
 class Checkpointer:
@@ -15,7 +16,7 @@ class Checkpointer:
         optimizers,
         schedulers,
         scaler,
-        checkpoints_dir: str,
+        checkpoints_dir: Path,
     ):
         """
         Handles saving and loading checkpoints with configurable strategies.
@@ -27,11 +28,12 @@ class Checkpointer:
         - scaler: Gradient scaler (if using mixed precision).
         - checkpoint_dir: Directory where checkpoints are stored.
         """
+        self.logger = get_logger(self.__class__.__name__)
 
         self.config = config
         self.checkpoint_path = config.get("checkpoint_path", None)
         if self.checkpoint_path:
-            logger.info(f"Starting from checkpoint: {self.checkpoint_path}")
+            self.logger.info(f"Starting from checkpoint: {self.checkpoint_path}")
 
         self.model = model
         self.optimizers = optimizers
@@ -40,19 +42,21 @@ class Checkpointer:
         self.checkpoint_dir = checkpoints_dir
 
         self.save_interval = config.get("save_interval", 1)
-        logger.info(f"Using save interval: {self.save_interval} for checkpointer")
+        self.logger.info(f"Using save interval: {self.save_interval} for checkpointer")
 
         self.keep_last_n = config.get("keep_last_n", None)
         if self.keep_last_n:
-            logger.info(f"Using keep last {self.keep_last_n} policy for checkpointer")
+            self.logger.info(
+                f"Using keep last {self.keep_last_n} policy for checkpointer"
+            )
 
         self.save_best = config.get("save_best", False)
         if self.save_best:
-            logger.info("Using save best policy for checkpointer")
+            self.logger.info("Using save best policy for checkpointer")
 
         self.best_val_loss = float("inf")
 
-        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        self.checkpoint_dir.mkdir(exist_ok=True)
 
     def save_checkpoint(self, epoch: int, val_loss: Optional[float] = None):
         """
@@ -65,18 +69,16 @@ class Checkpointer:
         if self.save_best and val_loss is not None:
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
-                checkpoint_path = os.path.join(
-                    self.checkpoint_dir, "best_checkpoint.pt"
-                )
+                checkpoint_path = self.checkpoint_dir.joinpath("best_checkpoint.pt")
                 self._save_to_disk(checkpoint_path, epoch)
-                logger.info(f"New best model saved (val_loss={val_loss:.4f})")
+                self.logger.info(f"New best model saved (val_loss={val_loss:.4f})")
                 return
 
         if epoch % self.save_interval == 0:
-            checkpoint_path = os.path.join(
-                self.checkpoint_dir, f"ckpt_epoch_{epoch}.pt"
+            checkpoint_path = self.checkpoint_dir.joinpath(f"ckpt_epoch_{epoch}.pt")
+            self.logger.info(
+                f"New checkpoint saved per save_interval: {self.save_interval}"
             )
-            logger.info(f"New checkpoint saved per save_interval: {self.save_interval}")
             self._save_to_disk(checkpoint_path, epoch)
 
             # remove old checkpoints if keep_last_n is set
@@ -84,9 +86,7 @@ class Checkpointer:
                 self._cleanup_old_checkpoints()
 
         else:
-            checkpoint_path = os.path.join(
-                self.checkpoint_dir, f"ckpt_epoch_{epoch}.pt"
-            )
+            checkpoint_path = self.checkpoint_dir.joinpath(f"ckpt_epoch_{epoch}.pt")
             self._save_to_disk(checkpoint_path, epoch)
 
     def _save_to_disk(self, checkpoint_path: str, epoch: int):
@@ -103,23 +103,23 @@ class Checkpointer:
             },
             checkpoint_path,
         )
-        logger.info(f"Checkpoint saved: {checkpoint_path}")
+        self.logger.info(f"Checkpoint saved: {checkpoint_path}")
 
     def _cleanup_old_checkpoints(self):
         """
         Removes old checkpoints if the number of saved checkpoints exceeds keep_last_n.
         """
         checkpoint_files = sorted(
-            glob.glob(os.path.join(self.checkpoint_dir, "ckpt_epoch_*.pt")),
-            key=lambda f: int(os.path.splitext(f.split("_")[-1])[0]),
+            self.checkpoint_dir.glob("ckpt_epoch_*.pt"),
+            key=lambda f: int(f.stem.split("_")[-1]),
         )
 
         if self.keep_last_n and len(checkpoint_files) > self.keep_last_n:
-            logger.info("Cleaning up old checkpoints per keep_last_n")
+            self.logger.info("Cleaning up old checkpoints per keep_last_n")
             to_remove = checkpoint_files[: len(checkpoint_files) - self.keep_last_n]
             for old_checkpoint in to_remove:
                 os.remove(old_checkpoint)
-                logger.info(f"Removed old checkpoint: {old_checkpoint}")
+                self.logger.info(f"Removed old checkpoint: {old_checkpoint}")
 
     def load_checkpoint(self, device: torch.device) -> int:
         """
@@ -133,10 +133,10 @@ class Checkpointer:
         if self.checkpoint_path is None:
             self.checkpoint_path = self._get_latest_checkpoint()
             if self.checkpoint_path is None:
-                logger.info("No checkpoints found, starting from scratch.")
+                self.logger.info("No checkpoints found, starting from scratch.")
                 return 1
 
-        logger.info(f"Loading checkpoint from {self.checkpoint_path}")
+        self.logger.info(f"Loading checkpoint from {self.checkpoint_path}")
         checkpoint = torch.load(
             self.checkpoint_path, map_location=device, weights_only=False
         )
@@ -174,9 +174,9 @@ class Checkpointer:
             return None
 
         checkpoints.sort(key=self._get_epoch_from_name)
-        return os.path.join(self.checkpoint_dir, checkpoints[-1])
+        return self.checkpoint_dir.joinpath(checkpoints[-1])
 
     @staticmethod
     def _get_epoch_from_name(filename: str) -> int:
         """Extracts epoch number from filename"""
-        return int(os.path.splitext(filename)[0].split("_")[-1])
+        return int(filename.split(".")[0].split("_")[-1])

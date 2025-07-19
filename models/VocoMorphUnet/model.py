@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 
 from .modules.decoder import Decoder
-from .modules.encoder import Encoder
 from .modules.effect_encoder import EffectEncoder
+from .modules.encoder import Encoder
 
 
 class VocoMorphUnet(nn.Module):

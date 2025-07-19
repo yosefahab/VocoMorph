@@ -1,33 +1,37 @@
 import os
-from tqdm import tqdm
-from typing import Optional, Tuple
 from datetime import datetime
+from pathlib import Path
+from typing import Optional, Tuple
 
 import torch
-
-from torch.amp import autocast, GradScaler
-from torchinfo import summary
+from torch.amp.autocast_mode import autocast
+from torch.amp.grad_scaler import GradScaler
+from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
-from torch.nn.utils import clip_grad_norm_
-from src.logging.logger import get_logger
-from src.utils import save_audio
+from torchinfo import summary
+from tqdm import tqdm
+
+from src.utils.audio import save_audio
+from src.utils.logger import get_logger
+
 from .checkpointer import Checkpointer
 from .factory import get_criterions, get_metrics, get_optimizers_and_schedulers
-
 
 logger = get_logger(__name__)
 
 
 class ModelTrainer:
     def __init__(
-        self, config: dict, model_dir: str, model: torch.nn.Module, device: torch.device
+        self,
+        config: dict,
+        model_dir: Path,
+        model: torch.nn.Module,
+        device: torch.device,
     ):
         self.config = config
+        assert model_dir.exists(), f"Model directory {model_dir} does not exist."
         self.model_dir = model_dir
-        assert os.path.exists(self.model_dir), (
-            f"Model directory {self.model_dir} does not exist."
-        )
         self.device = device
         self.model = model
         self.model.to(self.device)
@@ -63,8 +67,8 @@ class ModelTrainer:
         self.test_epochs = self.config["trainer"].get("test_epochs", [])
         self.metrics = get_metrics(self.config["metrics"])
 
-        self.checkpoints_dir = os.path.join(self.model_dir, "checkpoints")
-        os.makedirs(self.checkpoints_dir, exist_ok=True)
+        self.checkpoints_dir = self.model_dir.joinpath("checkpoints")
+        self.checkpoints_dir.mkdir(exist_ok=True)
 
         self.checkpointer = Checkpointer(
             self.config["checkpointer"],
@@ -75,7 +79,7 @@ class ModelTrainer:
             self.checkpoints_dir,
         )
 
-        summary_file = os.path.join(self.model_dir, "model_summary.txt")
+        summary_file = self.model_dir.joinpath("model_summary.txt")
         with open(summary_file, "w") as f:
             logger.info(f"Saving model summary to: {summary_file}")
             f.write(str(summary(self.model, device=device, verbose=0)))
@@ -218,12 +222,10 @@ class ModelTrainer:
     def compute_weighted_losses(
         self, logits: torch.Tensor, targets: torch.Tensor
     ) -> Tuple[torch.Tensor, dict]:
-        raw_losses = {}
         weighted_losses = {}
 
         for name, criterion in self.criterions.items():
             raw_loss = criterion(logits, targets)
-            raw_losses[name] = raw_loss.detach()
 
             weighted_loss = raw_loss * self.criterions_stats[name]["weight"]
             weighted_losses[name] = weighted_loss
@@ -234,11 +236,18 @@ class ModelTrainer:
         return total_weighted_loss, weighted_losses
 
     def accumulate_and_step(self, loss: torch.Tensor, step: int, total_steps: int):
+        # clear gradients
+        if (step + 1) % self.grad_accum_steps == 0 or (step + 1) == total_steps:
+            for item in self.optimizers_and_schedulers:
+                item["optimizer"].zero_grad()
+
+        # perform backward pass
         if self.scaler:
             self.scaler.scale(loss).backward()
         else:
             loss.backward()
 
+        # if reached grad_accum_steps, step schedulers & optimizer and update scaler
         if (step + 1) % self.grad_accum_steps == 0 or (step + 1) == total_steps:
             for item in self.optimizers_and_schedulers:
                 optimizer = item["optimizer"]
@@ -254,10 +263,6 @@ class ModelTrainer:
 
             if self.scaler:
                 self.scaler.update()
-
-            for item in self.optimizers_and_schedulers:
-                optimizer = item["optimizer"]
-                optimizer.zero_grad()
 
     def train_one_epoch(self, data_loader: DataLoader) -> dict:
         """
@@ -346,6 +351,7 @@ class ModelTrainer:
 
         train_metrics = {}
         val_metrics = {}
+        epoch = start_epoch
         try:
             for epoch in range(start_epoch, max_epochs):
                 logger.info(f"Entering Epoch: {epoch}/{max_epochs}")
@@ -375,7 +381,7 @@ class ModelTrainer:
             self.close_writer()
 
     def evaluate(
-        self, data_loader: DataLoader, output_dir: Optional[str] = None
+        self, data_loader: DataLoader, output_dir: Optional[Path] = None
     ) -> dict:
         """
         Args:
@@ -406,13 +412,13 @@ class ModelTrainer:
                         logits.cpu().detach(), data_loader.dataset.fs, id, output_dir
                     )
 
-                total_weighted_loss, individual_weighted_losses = (
-                    self.compute_weighted_losses(logits, targets)
+                total_weighted_loss, weighted_losses = self.compute_weighted_losses(
+                    logits, targets
                 )
 
                 # accumulate for reporting
                 running_total_weighted_loss += total_weighted_loss.item()
-                for name, loss_value in individual_weighted_losses.items():
+                for name, loss_value in weighted_losses.items():
                     running_individual_weighted_losses[name] += loss_value.item()
 
                 self.update_metrics(logits, targets)
@@ -433,7 +439,7 @@ class ModelTrainer:
                 "Metrics": self.compute_metrics(),
             }
 
-    def test(self, test_loader: DataLoader, output_dir: Optional[str] = None):
+    def test(self, test_loader: DataLoader, output_dir: Optional[Path] = None):
         """
         Evaluate the model on the test data
         Args:
@@ -441,7 +447,7 @@ class ModelTrainer:
         """
         logger.info("Testing model")
         if output_dir is not None:
-            os.makedirs(output_dir, exist_ok=True)
+            output_dir.mkdir(exist_ok=True)
             logger.info(f"Saving output to: {output_dir}")
 
         metrics = self.evaluate(test_loader, output_dir=output_dir)
@@ -456,10 +462,11 @@ class ModelTrainer:
 
     def open_writer(self):
         logger.info("Opening tensorboard writer")
-        self.logs_dir = os.path.join(
-            self.model_dir, "logs", datetime.now().strftime("%d%m%Y-%H%M%S")
+        self.logs_dir = self.model_dir.joinpath(
+            "logs", datetime.now().strftime("%d%m%Y-%H%M%S")
         )
-        os.makedirs(self.logs_dir, exist_ok=True)
+
+        self.logs_dir.mkdir(exist_ok=False)
 
         self.tensorboard_writer = SummaryWriter(log_dir=self.logs_dir)
 

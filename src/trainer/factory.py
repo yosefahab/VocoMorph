@@ -1,10 +1,10 @@
 from importlib import import_module
-from typing import List, Any, Callable, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable, List
 
 import torch
 from torcheval import metrics
 
-from src.logging.logger import get_logger
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

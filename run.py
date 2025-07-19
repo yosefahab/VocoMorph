@@ -1,18 +1,20 @@
 import os
 import sys
+from pathlib import Path
 
 if os.environ.get("PROJECT_ROOT", None) is None:
-    PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
-    os.environ["PROJECT_ROOT"] = PROJECT_ROOT
-    sys.path.append(PROJECT_ROOT)  # ensure src/ is accessible
+    PROJECT_ROOT = Path(__file__).parent.absolute()
+    os.environ["PROJECT_ROOT"] = str(PROJECT_ROOT)
+    sys.path.append(str(PROJECT_ROOT))  # ensure src/ is accessible
 
 if os.environ.get("DATA_ROOT", None) is None:
-    DATA_ROOT = os.path.join(PROJECT_ROOT, "data")
-    os.environ["DATA_ROOT"] = DATA_ROOT
+    DATA_ROOT = Path(os.environ["PROJECT_ROOT"]).joinpath("data")
+    os.environ["DATA_ROOT"] = str(DATA_ROOT)
 
 import argparse
 from importlib import import_module
-from src.utils import parse_yaml
+
+from src.utils.parsers import parse_yaml
 
 
 def parse_args():
@@ -90,9 +92,9 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
 
-    model_dir = os.path.join(os.environ["PROJECT_ROOT"], "models", args.model_name)
-    assert os.path.exists(model_dir), f"{model_dir} does not exist"
-    yaml_path = os.path.join(model_dir, "config.yaml")
+    model_dir = Path(os.environ["PROJECT_ROOT"]).joinpath("models", args.model_name)
+    assert model_dir.exists(), f"{model_dir} does not exist"
+    yaml_path = model_dir.joinpath("config.yaml")
     yaml_dict = parse_yaml(yaml_path)
     config = yaml_dict["config"]
 

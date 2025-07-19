@@ -1,31 +1,43 @@
-import os
-import torch
-import torch.nn as nn
+from pathlib import Path
 from typing import Optional
 
-from .utils import load_audio, save_audio
+import torch
+import torch.nn as nn
+
+from src.utils.audio import load_audio, save_audio
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def infer(
     effect_id: int,
-    filepath: str,
+    filepath: Path,
     model: nn.Module,
     config: dict,
-    output_path: Optional[str] = None,
+    device: torch.device,
+    output_path: Optional[Path] = None,
 ):
+    logger.info(f"Running inference on: {filepath} with EID: {effect_id}")
     sr = config["data"]["sample_rate"]
     channels = config["data"]["channels"]
-    audio = load_audio(filepath, sr, channels)[0]
-    audio_tensor = torch.Tensor(audio).unsqueeze(0)
 
-    effect_id_tensor = torch.tensor(effect_id, dtype=torch.long).unsqueeze(0)
-    audio_output = (
-        model((effect_id_tensor, audio_tensor)).detach().cpu().squeeze(0).numpy()
-    )
+    logger.info("Loading audio")
+    audio = load_audio(filepath, sr, channels)[0]
+    audio_tensor = torch.Tensor(audio).unsqueeze(0).to(device)
+
+    effect_id_tensor = torch.tensor(
+        effect_id, dtype=torch.long, device=device
+    ).unsqueeze(0)
+    model = model.to(device)
+    model.eval()
+    with torch.no_grad():
+        audio_output = model((effect_id_tensor, audio_tensor)).cpu().squeeze(0).numpy()
 
     output_path = output_path or filepath
-    filedir = os.path.dirname(output_path)
-    filename = os.path.splitext(os.path.basename(output_path))[0]
+    filedir = output_path.parent
+    filename = output_path.stem
     filename += f"_{effect_id}.wav"
 
+    logger.info(f"Saving audio to: {output_path}")
     save_audio(audio_output, sr, filename, filedir)

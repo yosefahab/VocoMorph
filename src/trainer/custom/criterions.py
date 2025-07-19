@@ -157,7 +157,7 @@ class VocalModulationLoss:
 
 
 @dataclass(slots=True)
-class SI_SNRLoss:
+class SISNRLoss:
     eps: float = 1e-8
 
     def __call__(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:

@@ -1,15 +1,16 @@
 import os
-import pandas as pd
-from typing import Dict, List, Tuple
 from functools import partial
 from multiprocessing import cpu_count
+from pathlib import Path
+from typing import Dict, List, Tuple
 
+import pandas as pd
 import torch
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset
 
-from src.logging.logger import get_logger
-from src.utils import load_audio
+from src.utils.audio import load_audio
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -114,12 +115,11 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
     # create dataset object for each split
     collate_fn_partial = partial(collate_fn, max_length=config["max_length"])
     dataloaders = {}
-    PROJECT_ROOT = os.environ["PROJECT_ROOT"]
+    PROJECT_ROOT = Path(os.environ["PROJECT_ROOT"])
     for split in splits:
-        datalist_filepath = os.path.join(
-            PROJECT_ROOT, config["datalists"][split]["path"]
-        )
-        assert os.path.exists(datalist_filepath), (
+        datalist_filepath = PROJECT_ROOT.joinpath(config["datalists"][split]["path"])
+
+        assert datalist_filepath.exists(), (
             f"Datalist for split {split} doesn't exist: {datalist_filepath}"
         )
         logger.info(f"Loading {split} data from: {datalist_filepath}")

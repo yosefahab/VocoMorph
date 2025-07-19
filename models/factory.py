@@ -1,9 +1,11 @@
 import os
 from importlib import import_module
+from pathlib import Path
 from typing import Any, Dict
 
 import torch
-from src.logging.logger import get_logger
+
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -12,8 +14,10 @@ def create_model_instance(model_name: str, config: Dict[str, Any]) -> torch.nn.M
     """Load and instantiate a model by name."""
     try:
         # ensure the model file exists
-        model_path = f"models/{model_name}/model.py"
-        if not os.path.exists(model_path):
+        model_path = Path(os.environ["PROJECT_ROOT"]).joinpath(
+            "models", model_name, "model.py"
+        )
+        if not model_path.exists():
             logger.critical(f"Model file not found: {model_path}")
             exit(1)
 

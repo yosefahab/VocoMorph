@@ -16,11 +16,11 @@ config:
     drop_last: true
 
     channels: &var_num_channels 1 # mono/stereo
-    sample_rate: &var_sample_rate 16000
-    n_mels: &var_n_mels 80
-    n_fft: &var_n_fft 1024
-    win_length: &var_win_length 1024
-    hop_length: &var_hop_length 256
+    sample_rate: 16000
+    n_mels: 80
+    n_fft: 1024
+    win_length: 1024
+    hop_length: 256
 
     # the chunk of audio the model processes at a time
     frame_length: &var_frame_length 4096 # 256 ms at 16k
@@ -32,13 +32,13 @@ config:
     datalists:
       train:
         batch_size: 8
-        path: "data/metadata/timit_train.csv"
+        path: "data/datalists/timit_train.csv"
       valid:
         batch_size: 8
-        path: "data/metadata/timit_valid.csv"
+        path: "data/datalists/timit_valid.csv"
       test:
         batch_size: 1
-        path: "data/metadata/timit_test.csv"
+        path: "data/datalists/timit_test.csv"
 
     effects:
       [
@@ -69,7 +69,7 @@ config:
     - name: "MSELoss"
       weight: 1.0
 
-    - name: "SI_SNRLoss"
+    - name: "SISNRLoss"
       weight: 0.5
 
     - name: "MultiResolutionSTFTLoss"

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field, fields
-from typing import Callable
 from functools import partial
+from typing import Callable
+
 import torch
 
 

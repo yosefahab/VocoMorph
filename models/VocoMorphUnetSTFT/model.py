@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 
-from .modules.stft import STFT
 from .modules.decoder import Decoder
-from .modules.encoder import Encoder
 from .modules.effect_encoder import EffectEncoder
+from .modules.encoder import Encoder
+from .modules.stft import STFT
 
 
 class VocoMorphUnetSTFT(nn.Module):

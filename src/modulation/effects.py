@@ -7,9 +7,9 @@ from .filters import apply_bandpass, apply_lowpass
 from .synthesis import generate_carrier, generate_noise
 from .transformations import (
     apply_compression,
-    normalize_audio,
     apply_pitch_shift,
     identity_transform,
+    normalize_audio,
 )
 
 

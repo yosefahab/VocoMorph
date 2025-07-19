@@ -1,14 +1,16 @@
 import math
+
 import torch
-from src.logging.logger import get_logger
-from src.utils import load_audio, save_audio
+
 from src.dataset.generate_dataset import apply_effects
-from src.modulation.utils import plot_waves, plot_tensors
 from src.modulation.effects import *
 from src.modulation.filters import *
 from src.modulation.synthesis import *
 from src.modulation.transformations import *
+from src.modulation.utils import plot_tensors, plot_waves
 from src.trainer.custom.criterions import *
+from src.utils.audio import load_audio, save_audio
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -108,7 +110,7 @@ def test_loss_functions(config):
         hop_length=hop_length,
         win_length=win_length,
     )
-    si_snr_loss_fn = SI_SNRLoss()
+    si_snr_loss_fn = SISNRLoss()
     energy_loss_fn = EnergyLoss()
 
     loss_fns = {
@@ -116,7 +118,7 @@ def test_loss_functions(config):
         "MultiResolutionSTFTLoss": multi_res_stft_loss_fn,
         "MelSpecLoss": mel_spec_loss_fn,
         "VocalModulationLoss": vocal_modulation_loss_fn,
-        "SI_SNRLoss": si_snr_loss_fn,
+        "SISNRLoss": si_snr_loss_fn,
         "EnergyLoss": energy_loss_fn,
     }
 

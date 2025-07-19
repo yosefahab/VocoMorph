@@ -1,10 +1,13 @@
 import os
+from pathlib import Path
 import shutil
 import tarfile
 import zipfile
-import requests
-from src.logging.logger import get_logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import requests
+
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -69,35 +72,35 @@ def extract_zipfile(zip_path: str, extract_path: str) -> bool:
 
 
 def download_librispeech_subset(
-    subset: str, destination_dir: str, remove_tar: bool = True
+    subset: str, destination_dir: Path, remove_tar: bool = True
 ):
     if subset not in LIBRISPEECH_URLS:
         logger.error(f"Invalid dataset: {subset}")
         return False
 
     url = LIBRISPEECH_URLS[subset]
-    tar_path = os.path.join(destination_dir, f"{subset}.tar.gz")
+    tar_path = destination_dir.joinpath(f"{subset}.tar.gz")
 
     if not download_file(url, tar_path):
         return False
     if not extract_tarfile(tar_path, destination_dir):
         return False
 
-    src_subset_dir = os.path.join(destination_dir, "LibriSpeech", subset)
-    dst_subset_dir = os.path.join(destination_dir, LIBRISPEECH_SUBSET_TO_DIR[subset])
+    src_subset_dir = destination_dir.joinpath("LibriSpeech", subset)
+    dst_subset_dir = destination_dir.joinpath(LIBRISPEECH_SUBSET_TO_DIR[subset])
 
     # replace or skip if the subset is already there
-    if os.path.exists(dst_subset_dir):
+    if dst_subset_dir.exists():
         shutil.rmtree(dst_subset_dir)
     shutil.move(src_subset_dir, dst_subset_dir)
 
-    lib_dir = os.path.join(destination_dir, "LibriSpeech")
+    lib_dir = destination_dir.joinpath("LibriSpeech")
 
     # move shared .TXT files
     for file in os.listdir(lib_dir):
-        file_path = os.path.join(lib_dir, file)
-        if file.lower().endswith(".txt") and os.path.isfile(file_path):
-            shutil.move(file_path, os.path.join(destination_dir, file))
+        file_path = lib_dir.joinpath(file)
+        if file.lower().endswith(".txt") and file_path.is_file():
+            shutil.move(file_path, destination_dir.joinpath(file))
 
     # remove LibriSpeech if empty after move
     if not os.listdir(lib_dir):
@@ -108,7 +111,7 @@ def download_librispeech_subset(
     return True
 
 
-def download_librispeech(destination_dir: str):
+def download_librispeech(destination_dir: Path):
     subsets = ["train-clean-100", "dev-clean", "test-clean"]
     with ThreadPoolExecutor(max_workers=len(subsets)) as executor:
         future_to_subset = {
@@ -127,11 +130,11 @@ def download_librispeech(destination_dir: str):
                 logger.exception(f"Exception while downloading {subset}: {e}")
 
 
-def download_timit(destination_dir: str, remove_zip: bool = True) -> bool:
+def download_timit(destination_dir: Path, remove_zip: bool = True) -> bool:
     """Downloads and extracts the TIMIT dataset."""
-    os.makedirs(destination_dir, exist_ok=True)
+    destination_dir.mkdir(exist_ok=True)
 
-    zip_path = os.path.join(destination_dir, "timit.zip")
+    zip_path = destination_dir.joinpath("timit.zip")
 
     if not download_file(TIMIT_URL, zip_path):
         return False
@@ -145,26 +148,26 @@ def download_timit(destination_dir: str, remove_zip: bool = True) -> bool:
         logger.info(f"Removed {zip_path}")
 
     # this specific url nests the dataset, so we need to move it to the destination_dir
-    timit_path = os.path.join(destination_dir, "data/lisa/data/timit/raw/TIMIT")
+    timit_path = destination_dir.joinpath("data/lisa/data/timit/raw/TIMIT")
     for item in ["TRAIN", "TEST"]:
-        s = os.path.join(timit_path, item)
-        d = os.path.join(destination_dir, item.lower())
+        s = timit_path.joinpath(item)
+        d = destination_dir.joinpath(item.lower())
         shutil.move(s, d)
 
-    shutil.rmtree(os.path.join(destination_dir, "data"))
+    shutil.rmtree(destination_dir.joinpath("data"))
     logger.info("Finished downloading TIMIT dataset")
     return True
 
 
 def main(dataset: str):
     """Main function to download the requested dataset."""
-    destination_dir = os.path.join(os.environ["DATA_ROOT"], dataset)
-    if os.path.exists(destination_dir):
+    destination_dir = Path(os.environ["DATA_ROOT"]).joinpath(dataset)
+    if destination_dir.exists():
         logger.info("Dataset already downloaded")
         return
 
     logger.info(f"Downloading dataset: {dataset}.")
-    os.makedirs(destination_dir, exist_ok=True)
+    destination_dir.mkdir(exist_ok=True)
     if dataset == "librispeech":
         download_librispeech(destination_dir)
     elif dataset == "timit":

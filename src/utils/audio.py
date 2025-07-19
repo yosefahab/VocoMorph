@@ -1,76 +1,21 @@
 import os
-import yaml
-import torch
-import random
-import numpy as np
+from pathlib import Path
+from typing import Optional, Tuple
+
 import librosa
+import numpy as np
 import soundfile as sf
-from typing import Literal, Optional, Tuple
-from src.logging.logger import get_logger
+
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-def set_seed(seed: int = 14):
-    """Sets the seet of the entire code to always simulate the same results everytime"""
-    logger.info(f"Setting seed to: {seed}")
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
-    os.environ["PYTHONHASHSEED"] = str(seed)
-
-
-def get_device(device_type: Literal["cpu", "gpu"] = "gpu") -> torch.device:
-    """
-    Selects device for executing models on (cpu, cuda, or mps)
-
-    Args:
-        device_type: type of device, (cpu or gpu)
-
-    Returns:
-        torch.device.
-    """
-    if device_type == "gpu":
-        if torch.backends.mps.is_available():
-            device = "mps"
-        elif torch.cuda.is_available():
-            device = "cuda"
-        else:
-            logger.warning("No GPU detected, using CPU")
-            device = "cpu"
-    else:
-        device = "cpu"
-
-    logger.info(f"Using device: {device}")
-    return torch.device(device)
-
-
-def parse_yaml(yaml_path: str) -> dict:
-    """
-    Parse and return the contents of a YAML file.
-
-    Args:
-        path: Path to the YAML file to be parsed.
-
-    Returns:
-        dict: A dictionary containing the parsed contents of the YAML file.
-    """
-    assert os.path.exists(yaml_path), f"YAML file {yaml_path} doesn't exist"
-    with open(yaml_path, "r") as yaml_file:
-        config_dict = yaml.full_load(yaml_file)
-        return config_dict
 
 
 def save_audio(
     audio: np.ndarray,
     sr: int,
     filename: str,
-    output_dir: Optional[str] = None,
+    output_dir: Optional[Path] = None,
     extension: str = ".wav",
 ):
     """
@@ -86,13 +31,17 @@ def save_audio(
 
     # set default output directory
     if output_dir is None:
-        output_dir = os.path.join(os.environ["DATA_ROOT"], "output")
+        output_dir = Path(os.environ["DATA_ROOT"]).joinpath("output")
+    else:
+        assert output_dir.is_dir(), (
+            f"param output_dir ({output_dir}) is not a directory"
+        )
 
     # create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir.mkdir(exist_ok=True)
 
     # construct full file path
-    filename = os.path.join(output_dir, filename)
+    filepath = output_dir.joinpath(filename)
 
     # ensure correct shape (T, C) for multi-channel
     if audio.ndim == 2 and audio.shape[0] < audio.shape[1]:
@@ -100,7 +49,7 @@ def save_audio(
 
     # check for NaN or Inf values
     if np.any(np.isnan(audio)) or np.any(np.isinf(audio)):
-        logger.error(f"Audio {filename} contains NaN or Inf values")
+        logger.error(f"Audio {filepath} contains NaN or Inf values")
 
     # convert to float32 if necessary
     if audio.dtype != np.float32:
@@ -110,7 +59,7 @@ def save_audio(
         audio = audio.astype(np.float32)
 
     # save the audio file
-    sf.write(filename, audio, sr)
+    sf.write(filepath, audio, sr)
 
 
 def load_audio(

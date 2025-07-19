@@ -1,17 +1,21 @@
 import os
 from argparse import Namespace
+from pathlib import Path
 
 import torch
 
 from models.factory import create_model_instance
-from .infer import infer
-from .dataset.dataset import get_dataloaders
-from .utils import get_device, set_seed
-from .trainer.trainer import ModelTrainer
+from src.dataset.dataset import get_dataloaders
+from src.infer import infer
+from src.trainer.trainer import ModelTrainer
+from src.utils.device import get_device
+from src.utils.seed import set_seed
+
+assert os.environ.get("PROJECT_ROOT") is not None
 
 
 def main(args: Namespace, config: dict):
-    model_dir = os.path.join(os.environ["PROJECT_ROOT"], "models", args.model_name)
+    model_dir = Path(os.environ["PROJECT_ROOT"]).joinpath("models", args.model_name)
     device = get_device(args.device)
 
     model = create_model_instance(args.model_name, config["model"])
@@ -34,10 +38,12 @@ def main(args: Namespace, config: dict):
         )
         model.load_state_dict(checkpoint["model_state_dict"])
 
-        output_filename = os.path.splitext(os.path.basename(args.sample_file))[0]
-        output_dir = os.path.join(os.environ["DATA_ROOT"], "output", output_filename)
+        output_filename = Path(args.sample_file).stem
+
+        assert os.environ.get("DATA_ROOT") is not None
+        output_dir = Path(os.environ["DATA_ROOT"]).joinpath("output", output_filename)
         for i in range(len(config["data"]["effects"])):
-            infer(i, args.sample_file, model, config, output_path=output_dir)
+            infer(i, args.sample_file, model, config, device, output_path=output_dir)
     else:
         # TODO: live inference
         pass

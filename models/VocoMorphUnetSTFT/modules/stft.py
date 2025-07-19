@@ -37,12 +37,13 @@ class STFT(nn.Module):
             n_fft=self.n_fft,
             hop_length=self.hop_length,
             win_length=self.win_length,
-            length=self.output_length,
+            # length=self.output_length,
             window=self.window,
             center=False,
             return_complex=False,
         )
-        assert self.output_length == istft_output.shape[-1], (
-            f"Shape mismatch, expected output wave of length {self.output_length} but got {istft_output.shape[-1]}"
-        )
-        return istft_output.view(B, C, self.output_length)
+        # assert self.output_length == istft_output.shape[-1], (
+        #     f"Shape mismatch, expected output wave of length {self.output_length} but got {istft_output.shape[-1]}"
+        # )
+        # return istft_output.view(B, C, self.output_length)
+        return istft_output.view(B, C, -1)

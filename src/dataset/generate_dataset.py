@@ -1,19 +1,20 @@
 import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
+from typing import List, Optional, Tuple
+
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import List, Optional, Tuple
 
-from src.logging.logger import get_logger
-from src.utils import load_audio, save_audio
 from src.modulation.utils import call_functions_by_name
-
+from src.utils.audio import load_audio, save_audio
+from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-def create_split_csv(dataset_dir: str, output_csv: str):
+def create_split_csv(dataset_dir: Path, output_csv: str):
     """
     Scans the dataset directory and creates a CSV with raw audio file paths.
 
@@ -21,7 +22,7 @@ def create_split_csv(dataset_dir: str, output_csv: str):
         dataset_dir: Path to the dataset directory.
         output_csv: Path to save the full dataset CSV.
     """
-    if not os.path.exists(dataset_dir):
+    if not dataset_dir.exists():
         logger.critical(f"{dataset_dir} does not exist! Terminating.")
         exit(1)
 
@@ -29,10 +30,11 @@ def create_split_csv(dataset_dir: str, output_csv: str):
     id = 0
     audio_files = []
     for root, _, files in os.walk(dataset_dir):
+        root = Path(root)
         for file in files:
             if file.lower().endswith(".wav") or file.lower().endswith(".flac"):
                 audio_files.append(
-                    {"ID": f"{id:07}", "raw_wav_path": os.path.join(root, file)}
+                    {"ID": f"{id:07}", "raw_wav_path": root.joinpath(file)}
                 )
                 id += 1
 
@@ -43,8 +45,8 @@ def create_split_csv(dataset_dir: str, output_csv: str):
 
 
 def split_dataset_csv(
-    input_csv: str,
-    output_csv: str,
+    input_csv: Path,
+    output_csv: Path,
     split_ratio: Tuple[float, float] = (0.8, 0.2),
     shuffle: Optional[bool] = False,
 ):
@@ -57,6 +59,7 @@ def split_dataset_csv(
         split_ratio: (train, validation) split ratios.
         shuffle: whether to shuffle the rows before splitting.
     """
+    assert input_csv.exists(), f"{input_csv} does not exist"
     logger.info(f"Splitting {input_csv} into {split_ratio}")
     df = pd.read_csv(input_csv, dtype={"ID": str})
     if shuffle:
@@ -64,9 +67,6 @@ def split_dataset_csv(
 
     train_end = int(len(df) * split_ratio[0])
     valid_end = train_end + int(len(df) * split_ratio[1])
-
-    output_dir = os.path.dirname(input_csv)
-    os.makedirs(output_dir, exist_ok=True)
 
     logger.info(f"Saving 1st split {split_ratio[0]} to {input_csv}")
     df.iloc[:train_end].to_csv(input_csv, index=False)
@@ -96,7 +96,7 @@ def _augment_wav(args: Tuple[pd.Series, int, str, List[str]]):
 
     for eid, modulated_wave in enumerate(modulated_waves):
         mod_filename = f"{wav_id}_e{eid}.wav"
-        mod_wav_path = os.path.join(output_dir, mod_filename)
+        mod_wav_path = output_dir.joinpath(mod_filename)
         save_audio(modulated_wave, sr, mod_filename, output_dir)
         assert len(modulated_wave) == len(raw_wave)
 
@@ -112,11 +112,11 @@ def _augment_wav(args: Tuple[pd.Series, int, str, List[str]]):
 
 
 def augment_files(
-    input_csv: str,
+    input_csv: Path,
     sr: int,
     effects: List[str],
-    output_dir: str,
-    output_csv: str,
+    output_dir: Path,
+    output_csv: Path,
 ):
     """
     Reads a dataset CSV, applies effects in parallel, and saves outputs to a new CSV.
@@ -131,7 +131,7 @@ def augment_files(
     df = pd.read_csv(input_csv, dtype={"ID": str})
     logger.info(f"Augmenting waves from {input_csv} ({len(df)} total)")
 
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir.mkdir(exist_ok=True)
 
     num_workers = max(1, int(os.cpu_count() or 1 * 0.8))
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
@@ -150,37 +150,37 @@ def augment_files(
 
 
 def create_splits(dataset: str):
-    data_root = os.environ["DATA_ROOT"]
-    metadata_dir = os.path.join(data_root, "metadata")
-    dataset_dir = os.path.join(data_root, dataset)
-    os.makedirs(metadata_dir, exist_ok=True)
+    data_root = Path(os.environ["DATA_ROOT"])
+    datalists_dir = data_root.joinpath("datalists")
+    dataset_dir = data_root.joinpath(dataset)
+    datalists_dir.mkdir(exist_ok=True)
 
     for split in ["train", "valid", "test"]:
-        split_dir = os.path.join(dataset_dir, split)
-        if os.path.exists(split_dir):
+        split_dir = dataset_dir.joinpath(split)
+        if split_dir.exists():
             logger.info(f"Creating {split} csv")
-            split_csv = os.path.join(metadata_dir, f"{dataset}_{split}.csv")
+            split_csv = datalists_dir.joinpath(f"{dataset}_{split}.csv")
             create_split_csv(split_dir, split_csv)
         # timit comes with no validation set, so we create one from train set
         elif dataset.lower() == "timit" and split == "valid":
             logger.warning(f"{split_dir} missing, splitting train set instead")
-            train_csv = os.path.join(metadata_dir, f"{dataset}_train.csv")
-            valid_csv = os.path.join(metadata_dir, f"{dataset}_valid.csv")
+            train_csv = datalists_dir.joinpath(f"{dataset}_train.csv")
+            valid_csv = datalists_dir.joinpath(f"{dataset}_valid.csv")
             split_dataset_csv(train_csv, valid_csv)
 
 
 def augment_dataset(dataset: str, config: dict):
-    data_root = os.environ["DATA_ROOT"]
-    metadata_dir = os.path.join(data_root, "metadata")
-    output_dir = os.path.join(data_root, dataset, "modulated")
+    data_root = Path(os.environ["DATA_ROOT"])
+    datalists_dir = data_root.joinpath("datalists")
+    output_dir = data_root.joinpath(dataset, "modulated")
     sr = config["sample_rate"]
     effects = config["effects"]
 
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir.mkdir(exist_ok=True)
 
     for split in ["train", "valid", "test"]:
-        split_csv = os.path.join(metadata_dir, f"{dataset}_{split}.csv")
-        if not os.path.exists(split_csv):
+        split_csv = datalists_dir.joinpath(f"{dataset}_{split}.csv")
+        if not split_csv.exists():
             logger.warning(f"{split_csv} does not exist, skipping augmentation.")
             continue
         logger.info(f"Augmenting {split}")
