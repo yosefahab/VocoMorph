@@ -41,9 +41,10 @@ def main(args: Namespace, config: dict):
         output_filename = Path(args.sample_file).stem
 
         assert os.environ.get("DATA_ROOT") is not None
-        output_dir = Path(os.environ["DATA_ROOT"]).joinpath("output", output_filename)
+        output_path = Path(os.environ["DATA_ROOT"]).joinpath("output", output_filename)
+        output_path.mkdir(exist_ok=True)
         for i in range(len(config["data"]["effects"])):
-            infer(i, args.sample_file, model, config, device, output_path=output_dir)
+            infer(i, args.sample_file, model, config, device, output_path=output_path)
     else:
         # TODO: live inference
         pass

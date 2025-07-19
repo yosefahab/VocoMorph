@@ -16,7 +16,7 @@ config:
     drop_last: true
 
     channels: &var_num_channels 1 # mono/stereo
-    sample_rate: 16000
+    sample_rate: &var_sample_rate 16000
     n_mels: 80
     n_fft: &var_n_fft 1024
     win_length: &var_win_length 1024
@@ -144,7 +144,7 @@ config:
     dummy_input:
       - shape: [1]
         dtype: long
-      - shape: [1, 1, 16000]
+      - shape: [1, 1, *var_sample_rate]
         dtype: float32
 
   checkpointer:

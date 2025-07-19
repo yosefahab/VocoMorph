@@ -4,9 +4,6 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import torch
-
-# from ptflops import get_model_complexity_info
-# from thop import profile
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
 from torch.nn.utils import clip_grad_norm_

@@ -85,7 +85,7 @@ config:
         # Moderate frequency resolution, good time resolution
             [512, 512, 128],
         ]
-    #
+
     # - name: "STFTLoss"
     #   weight: 0.5
     #   params:
@@ -140,7 +140,7 @@ config:
     dummy_input:
       - shape: [1]
         dtype: long
-      - shape: [1, 1, 16000]
+      - shape: [1, 1, *var_sample_rate]
         dtype: float32
 
   checkpointer:
