@@ -14,7 +14,7 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def create_split_csv(dataset_dir: Path, output_csv: str):
+def create_split_csv(dataset_dir: Path, output_csv: Path):
     """
     Scans the dataset directory and creates a CSV with raw audio file paths.
 
@@ -82,7 +82,7 @@ def apply_effects(audio: np.ndarray, sr: int, effects: List[str]):
     return call_functions_by_name(effects, audio=audio, sr=sr)
 
 
-def _augment_wav(args: Tuple[pd.Series, int, str, List[str]]):
+def _augment_wav(args: Tuple[pd.Series, int, Path, List[str]]):
     """Helper function to process a single row for parallel execution."""
     row, sr, output_dir, effects = args
     # wav_id = str(row["ID"]).zfill(7)

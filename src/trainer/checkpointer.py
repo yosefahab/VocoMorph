@@ -167,7 +167,7 @@ class Checkpointer:
         """
         checkpoints = [
             f
-            for f in os.listdir(self.checkpoint_dir)
+            for f in self.checkpoint_dir.iterdir()
             if f.startswith("ckpt_epoch_") and f.endswith(".pt")
         ]
         if not checkpoints:

@@ -30,7 +30,7 @@ LIBRISPEECH_SUBSET_TO_DIR = {
 TIMIT_URL = "https://figshare.com/ndownloader/files/10256148"
 
 
-def download_file(url: str, dest_path: str) -> bool:
+def download_file(url: str, dest_path: Path) -> bool:
     """Downloads a file from a URL and saves it to the destination path."""
     try:
         logger.info(f"Downloading file: {url}")
@@ -46,7 +46,7 @@ def download_file(url: str, dest_path: str) -> bool:
         return False
 
 
-def extract_tarfile(tar_path: str, extract_path: str) -> bool:
+def extract_tarfile(tar_path: Path, extract_path: Path) -> bool:
     """Extracts a tar.gz file into the given directory."""
     try:
         logger.info(f"extracting tar: {tar_path}")
@@ -59,7 +59,7 @@ def extract_tarfile(tar_path: str, extract_path: str) -> bool:
         return False
 
 
-def extract_zipfile(zip_path: str, extract_path: str) -> bool:
+def extract_zipfile(zip_path: Path, extract_path: Path) -> bool:
     """Extracts a zip file into the given directory."""
     try:
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
@@ -97,17 +97,17 @@ def download_librispeech_subset(
     lib_dir = destination_dir.joinpath("LibriSpeech")
 
     # move shared .TXT files
-    for file in os.listdir(lib_dir):
+    for file in lib_dir.iterdir():
         file_path = lib_dir.joinpath(file)
-        if file.lower().endswith(".txt") and file_path.is_file():
+        if file.name.endswith(".txt") and file_path.is_file():
             shutil.move(file_path, destination_dir.joinpath(file))
 
     # remove LibriSpeech if empty after move
-    if not os.listdir(lib_dir):
+    if not lib_dir.iterdir():
         os.rmdir(lib_dir)
 
     if remove_tar:
-        os.remove(tar_path)
+        tar_path.unlink()
     return True
 
 
@@ -144,7 +144,7 @@ def download_timit(destination_dir: Path, remove_zip: bool = True) -> bool:
         return False
 
     if remove_zip:
-        os.remove(zip_path)
+        zip_path.unlink()
         logger.info(f"Removed {zip_path}")
 
     # this specific url nests the dataset, so we need to move it to the destination_dir
