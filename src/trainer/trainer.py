@@ -4,6 +4,9 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 import torch
+
+# from ptflops import get_model_complexity_info
+# from thop import profile
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
 from torch.nn.utils import clip_grad_norm_
@@ -18,8 +21,6 @@ from src.utils.logger import get_logger
 from .checkpointer import Checkpointer
 from .factory import get_criterions, get_metrics, get_optimizers_and_schedulers
 
-logger = get_logger(__name__)
-
 
 class ModelTrainer:
     def __init__(
@@ -29,6 +30,7 @@ class ModelTrainer:
         model: torch.nn.Module,
         device: torch.device,
     ):
+        self.logger = get_logger(self.__class__.__name__)
         self.config = config
         assert model_dir.exists(), f"Model directory {model_dir} does not exist."
         self.model_dir = model_dir
@@ -57,11 +59,11 @@ class ModelTrainer:
 
         self.start_scheduling = config["trainer"]["start_scheduling"]
         self.grad_accum_steps = self.config["trainer"].get("grad_accumulation_steps", 1)
-        logger.info(f"Using gradient accumulation steps: {self.grad_accum_steps}")
+        self.logger.info(f"Using gradient accumulation steps: {self.grad_accum_steps}")
 
         self.scaler = None
         if self.config["trainer"]["precision"] == "fp16" and self.device.type == "cuda":
-            logger.info("Using mixed precision & GradScaler")
+            self.logger.info("Using mixed precision & GradScaler")
             self.scaler = GradScaler()
 
         self.test_epochs = self.config["trainer"].get("test_epochs", [])
@@ -78,21 +80,78 @@ class ModelTrainer:
             self.scaler,
             self.checkpoints_dir,
         )
+        self._get_model_summary()
 
-        summary_file = self.model_dir.joinpath("model_summary.txt")
-        with open(summary_file, "w") as f:
-            logger.info(f"Saving model summary to: {summary_file}")
-            f.write(str(summary(self.model, device=device, verbose=0)))
+    def _get_model_summary(self):
+        self.logger.info("Generating model summary")
+        dummy_input_shape = self.config["trainer"].get("dummy_input")
 
-    def log_tensorboard_metrics(
+        col_names = ["num_params", "params_percent", "kernel_size", "trainable"]
+        dummy_input = None
+        if dummy_input_shape:
+            dummy_input = self._generate_dummy_input(dummy_input_shape)
+            self.logger.info(f"Summary dummy input: {dummy_input}")
+            if dummy_input is not None:
+                col_names.extend(["input_size", "output_size", "mult_adds"])
+                dummy_input = (dummy_input,)
+
+        model_summary = summary(
+            self.model,
+            input_data=dummy_input,
+            device=self.device,
+            verbose=0,
+        )
+
+        summary_file_path = self.model_dir.joinpath("model_summary.txt")
+        with open(summary_file_path, "w") as f:
+            self.logger.info(f"Saving model summary to: {summary_file_path}")
+            f.write(str(model_summary))
+
+    def _generate_dummy_input(self, dummy_cfg):
+        self.logger.info(f"Generating dummy input from: {dummy_cfg}")
+
+        def resolve_dtype(dtype_str):
+            try:
+                return getattr(torch, dtype_str)
+            except AttributeError:
+                self.logger.warning(
+                    f"Invalid dtype: {dtype_str}, defaulting to float32"
+                )
+                return torch.float32
+
+        def make_tensor(entry):
+            if isinstance(entry, dict) and "shape" in entry:
+                shape = entry["shape"]
+                dtype = resolve_dtype(entry.get("dtype", "float32"))
+                if dtype.is_floating_point:
+                    return torch.rand(*shape, dtype=dtype)
+                else:
+                    return torch.zeros(*shape, dtype=dtype)
+            elif isinstance(entry, list):
+                return torch.rand(*entry, dtype=torch.float32)
+            elif isinstance(entry, (int, float)):
+                return torch.tensor(entry, dtype=torch.float32)
+            else:
+                self.logger.error(f"Unsupported dummy_input entry: {entry}")
+                return None
+
+        if isinstance(dummy_cfg, list):
+            tensors = tuple(make_tensor(item) for item in dummy_cfg)
+            return tensors if len(tensors) > 1 else tensors[0]
+        elif isinstance(dummy_cfg, dict):
+            return {k: make_tensor(v) for k, v in dummy_cfg.items()}
+        else:
+            return make_tensor(dummy_cfg)
+
+    def _log_tensorboard_metrics(
         self,
         epoch: int,
         train_metrics: dict,
         val_metrics: dict,
     ):
-        logger.info("Logging metrics to tensorboard")
+        self.logger.info("Logging metrics to tensorboard")
 
-        logger.info("=== Epoch losses ===")
+        self.logger.info("=== Epoch losses ===")
         train_loss_keys = set(train_metrics["Losses"].keys())
         val_loss_keys = set(val_metrics["Losses"].keys())
         diff = train_loss_keys ^ val_loss_keys
@@ -101,7 +160,7 @@ class ModelTrainer:
         for metric in train_loss_keys:
             t_metric = train_metrics["Losses"][metric]
             v_metric = val_metrics["Losses"][metric]
-            logger.info(f"{metric}: Train={t_metric:.4f} | Val={v_metric:.4f}")
+            self.logger.info(f"{metric}: Train={t_metric:.4f} | Val={v_metric:.4f}")
 
             self.tensorboard_writer.add_scalars(
                 f"Losses/{metric}",
@@ -109,7 +168,7 @@ class ModelTrainer:
                 epoch,
             )
 
-        logger.info("=== Epoch metrics ===")
+        self.logger.info("=== Epoch metrics ===")
         train_metric_keys = set(train_metrics["Metrics"].keys())
         val_metric_keys = set(val_metrics["Metrics"].keys())
         diff = train_metric_keys ^ val_metric_keys
@@ -118,7 +177,7 @@ class ModelTrainer:
         for metric in train_metric_keys:
             t_metric = train_metrics["Metrics"][metric]
             v_metric = val_metrics["Metrics"][metric]
-            logger.info(f"{metric}: Train={t_metric:.4f} | Val={v_metric:.4f}")
+            self.logger.info(f"{metric}: Train={t_metric:.4f} | Val={v_metric:.4f}")
 
             self.tensorboard_writer.add_scalars(
                 f"Metrics/{metric}",
@@ -141,7 +200,7 @@ class ModelTrainer:
 
         self.tensorboard_writer.flush()
 
-    def update_schedulers(
+    def _update_schedulers(
         self,
         step: bool = False,
         epoch: bool = False,
@@ -169,7 +228,7 @@ class ModelTrainer:
                 if val_loss is not None:
                     scheduler.step(val_loss)
                 else:
-                    logger.warning(
+                    self.logger.warning(
                         "Couldn't update ReduceLROnPlateau scheduler because val_loss is None when epoch update was requested."
                     )
 
@@ -194,7 +253,7 @@ class ModelTrainer:
             ):
                 scheduler.step()  # update epoch-based schedulers
 
-    def update_metrics(self, logits: torch.Tensor, targets: torch.Tensor):
+    def _update_metrics(self, logits: torch.Tensor, targets: torch.Tensor):
         """Updates each evaluation metric"""
         for metric in self.metrics.values():
             metric.update(
@@ -203,7 +262,7 @@ class ModelTrainer:
                 targets.view(targets.shape[0], -1).cpu().detach(),
             )
 
-    def compute_metrics(self) -> dict:
+    def _compute_metrics(self) -> dict:
         """
         Computes each evaluation metric.
         Evaluation metrics are updated per batch in both training and validation.
@@ -211,7 +270,7 @@ class ModelTrainer:
         Returns:
         - Dictionary containing names of metrics defined in the configuration and their corresponding results
         """
-        logger.info("Computing metrics")
+        self.logger.info("Computing metrics")
         results = {}
         for m, f in self.metrics.items():
             results[m] = f.compute()
@@ -219,7 +278,7 @@ class ModelTrainer:
 
         return results
 
-    def compute_weighted_losses(
+    def _compute_weighted_losses(
         self, logits: torch.Tensor, targets: torch.Tensor
     ) -> Tuple[torch.Tensor, dict]:
         weighted_losses = {}
@@ -235,7 +294,7 @@ class ModelTrainer:
 
         return total_weighted_loss, weighted_losses
 
-    def accumulate_and_step(self, loss: torch.Tensor, step: int, total_steps: int):
+    def _accumulate_and_step(self, loss: torch.Tensor, step: int, total_steps: int):
         # clear gradients
         if (step + 1) % self.grad_accum_steps == 0 or (step + 1) == total_steps:
             for item in self.optimizers_and_schedulers:
@@ -264,7 +323,7 @@ class ModelTrainer:
             if self.scaler:
                 self.scaler.update()
 
-    def train_one_epoch(self, data_loader: DataLoader) -> dict:
+    def _train_one_epoch(self, data_loader: DataLoader) -> dict:
         """
         Args:
             data_loader: DataLoader for training data.
@@ -290,12 +349,12 @@ class ModelTrainer:
             with autocast(device_type=self.device.type, enabled=autocast_enabled):
                 logits = self.model((eid, inputs))
 
-                total_weighted_loss, weighted_losses = self.compute_weighted_losses(
+                total_weighted_loss, weighted_losses = self._compute_weighted_losses(
                     logits, targets
                 )
 
             # backward pass
-            self.accumulate_and_step(total_weighted_loss, step, total_steps)
+            self._accumulate_and_step(total_weighted_loss, step, total_steps)
 
             # accumulate loss for reporting
             running_total_weighted_loss += total_weighted_loss.item()
@@ -303,7 +362,7 @@ class ModelTrainer:
                 running_weighted_losses[name] += loss_value.item()
 
             # update schedulers for STEP only
-            self.update_schedulers(step=True, epoch=False, val_loss=None)
+            self._update_schedulers(step=True, epoch=False, val_loss=None)
 
         # normalize accumulated losses by number of batches
         # since each criterion returns avg loss per sample for the batch,
@@ -320,7 +379,7 @@ class ModelTrainer:
                 **avg_individual_weighted_losses,
                 "Total": avg_total_weighted_loss,
             },
-            "Metrics": self.compute_metrics(),
+            "Metrics": self._compute_metrics(),
         }
 
     def train(
@@ -338,14 +397,14 @@ class ModelTrainer:
             val_loader: validation set DataLoader.
             test_loader: optional test set DataLoader.
         """
-        # create logs dir and tensorboard loggers for current training run
-        self.open_writer()
+        # create logs dir and tensorboard self.loggers for current training run
+        self._open_writer()
 
         # load last checkpoint (or start from scratch if 1)
         start_epoch = self.checkpointer.load_checkpoint(self.device)
 
         # log training info
-        logger.info(
+        self.logger.info(
             f"Starting training from epoch: {start_epoch} for {max_epochs} max epochs."
         )
 
@@ -354,8 +413,8 @@ class ModelTrainer:
         epoch = start_epoch
         try:
             for epoch in range(start_epoch, max_epochs):
-                logger.info(f"Entering Epoch: {epoch}/{max_epochs}")
-                train_metrics = self.train_one_epoch(train_loader)
+                self.logger.info(f"Entering Epoch: {epoch}/{max_epochs}")
+                train_metrics = self._train_one_epoch(train_loader)
                 val_metrics = self.evaluate(val_loader)
 
                 if test_loader and epoch in self.test_epochs:
@@ -363,22 +422,22 @@ class ModelTrainer:
 
                 val_loss = val_metrics["Losses"]["Total"]
                 if epoch >= self.start_scheduling:
-                    self.update_schedulers(step=False, epoch=True, val_loss=val_loss)
+                    self._update_schedulers(step=False, epoch=True, val_loss=val_loss)
                 else:
-                    logger.info(
+                    self.logger.info(
                         f"Current epoch {epoch} < {self.start_scheduling}, skipping scheduling"
                     )
 
-                self.log_tensorboard_metrics(epoch, train_metrics, val_metrics)
+                self._log_tensorboard_metrics(epoch, train_metrics, val_metrics)
                 self.checkpointer.save_checkpoint(epoch, val_loss=val_loss)
 
         except KeyboardInterrupt:
-            logger.warning("Training interrupted. Saving checkpoint and exiting")
+            self.logger.warning("Training interrupted. Saving checkpoint and exiting")
             self.checkpointer.save_checkpoint(epoch)
 
         finally:
-            logger.info("Finished training")
-            self.close_writer()
+            self.logger.info("Finished training")
+            self._close_writer()
 
     def evaluate(
         self, data_loader: DataLoader, output_dir: Optional[Path] = None
@@ -412,7 +471,7 @@ class ModelTrainer:
                         logits.cpu().detach(), data_loader.dataset.fs, id, output_dir
                     )
 
-                total_weighted_loss, weighted_losses = self.compute_weighted_losses(
+                total_weighted_loss, weighted_losses = self._compute_weighted_losses(
                     logits, targets
                 )
 
@@ -421,7 +480,7 @@ class ModelTrainer:
                 for name, loss_value in weighted_losses.items():
                     running_individual_weighted_losses[name] += loss_value.item()
 
-                self.update_metrics(logits, targets)
+                self._update_metrics(logits, targets)
 
             # normalize accumulated losses by number of batches
             num_batches = len(data_loader)
@@ -436,7 +495,7 @@ class ModelTrainer:
                     **avg_individual_weighted_losses,
                     "Total": avg_total_weighted_loss,
                 },
-                "Metrics": self.compute_metrics(),
+                "Metrics": self._compute_metrics(),
             }
 
     def test(self, test_loader: DataLoader, output_dir: Optional[Path] = None):
@@ -445,23 +504,23 @@ class ModelTrainer:
         Args:
             test_loader: test DataLoader.
         """
-        logger.info("Testing model")
+        self.logger.info("Testing model")
         if output_dir is not None:
             output_dir.mkdir(exist_ok=True)
-            logger.info(f"Saving output to: {output_dir}")
+            self.logger.info(f"Saving output to: {output_dir}")
 
         metrics = self.evaluate(test_loader, output_dir=output_dir)
 
-        logger.info("=== Test losses ===")
+        self.logger.info("=== Test losses ===")
         for k, v in metrics["Losses"].items():
-            logger.info(f"{k}: {v:.4f}")
+            self.logger.info(f"{k}: {v:.4f}")
 
-        logger.info("=== Test metrics ===")
+        self.logger.info("=== Test metrics ===")
         for k, v in metrics["Metrics"].items():
-            logger.info(f"{k}: {v:.4f}")
+            self.logger.info(f"{k}: {v:.4f}")
 
-    def open_writer(self):
-        logger.info("Opening tensorboard writer")
+    def _open_writer(self):
+        self.logger.info("Opening tensorboard writer")
         self.logs_dir = self.model_dir.joinpath(
             "logs", datetime.now().strftime("%d%m%Y-%H%M%S")
         )
@@ -470,9 +529,9 @@ class ModelTrainer:
 
         self.tensorboard_writer = SummaryWriter(log_dir=self.logs_dir)
 
-    def close_writer(self):
+    def _close_writer(self):
         """
         Close the Tensorboard writer.
         """
-        logger.info("Closing tensorboard writer")
+        self.logger.info("Closing tensorboard writer")
         self.tensorboard_writer.close()

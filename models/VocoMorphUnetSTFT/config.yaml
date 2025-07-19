@@ -141,6 +141,11 @@ config:
     test_epochs: [20, 50, 100]
     precision: "fp16"
     grad_accumulation_steps: 4
+    dummy_input:
+      - shape: [1]
+        dtype: long
+      - shape: [1, 1, 16000]
+        dtype: float32
 
   checkpointer:
     save_interval: 5 # num epochs to save checkpoint
