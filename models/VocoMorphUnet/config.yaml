@@ -78,14 +78,10 @@ config:
         alpha: 1.0
         beta: 0.5
         resolutions: [
-        # Good frequency resolution, medium time resolution
-            [1024, 1024, 256],
-        # Excellent frequency resolution, poor time resolution
-            [2048, 2048, 512],
-        # Moderate frequency resolution, good time resolution
-            [512, 512, 128],
-        ]
-
+            [512, 512, 128], # Moderate frequency resolution, good time resolution
+            [1024, 1024, 256], # Good frequency resolution, medium time resolution
+            [2048, 2048, 512], # Excellent frequency resolution, poor time resolution
+          ]
     # - name: "STFTLoss"
     #   weight: 0.5
     #   params:

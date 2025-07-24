@@ -1,7 +1,6 @@
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 from torch.amp.autocast_mode import autocast
@@ -38,7 +37,7 @@ class ModelTrainer:
         self.clip_norm = self.config["trainer"]["clip_norm"]
 
         self.criterions = get_criterions(self.config["criterions"])
-        self.criterions_stats = {
+        self.criterions_stats: Dict[str, Dict[str, float]] = {
             c["name"]: {"weight": c.get("weight", 1.0)}
             for c in self.config["criterions"]
         }
@@ -277,7 +276,7 @@ class ModelTrainer:
 
     def _compute_weighted_losses(
         self, logits: torch.Tensor, targets: torch.Tensor
-    ) -> Tuple[torch.Tensor, dict]:
+    ) -> Tuple[float, dict]:
         weighted_losses = {}
 
         for name, criterion in self.criterions.items():
@@ -522,7 +521,7 @@ class ModelTrainer:
             "logs", datetime.now().strftime("%d%m%Y-%H%M%S")
         )
 
-        self.logs_dir.mkdir(exist_ok=False)
+        self.logs_dir.mkdir(parents=True, exist_ok=False)
 
         self.tensorboard_writer = SummaryWriter(log_dir=self.logs_dir)
 

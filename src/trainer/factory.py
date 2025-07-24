@@ -44,12 +44,7 @@ def get_instances(
 
 
 def get_criterions(config: Dict[str, Any]) -> Dict[str, Any]:
-    return get_instances(
-        "criterions",
-        torch.nn,
-        create_instance,
-        config,
-    )
+    return get_instances("criterions", torch.nn, create_instance, config)
 
 
 def get_optimizers_and_schedulers(
