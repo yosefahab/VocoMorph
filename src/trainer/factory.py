@@ -1,5 +1,5 @@
 from importlib import import_module
-from typing import Any, Callable, Dict, Iterable, List
+from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 import torch
 from torcheval import metrics
@@ -43,21 +43,18 @@ def get_instances(
     }
 
 
-def get_criterions(config: Dict[str, Any]) -> Dict[str, Any]:
+def get_criterions(config: List[Dict[str, Any]]) -> Dict[str, Any]:
     return get_instances("criterions", torch.nn, create_instance, config)
 
 
 def get_optimizers_and_schedulers(
     config: List[Dict[str, Any]], parameters: Iterable[torch.nn.Parameter]
-) -> List[Dict[str, Any]]:
+) -> List[Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler._LRScheduler | None]]:
     """
     Creates optimizer instances and their associated scheduler instances.
-
     Args:
-        config: A list of dictionaries, where each dictionary defines an optimizer
-                and optionally its scheduler.
-        parameters: The model parameters to optimize.
-
+    - config: A list of dictionaries, where each dictionary defines an optimizer and optionally its scheduler.
+    - parameters: The model parameters to optimize.
     Returns:
         A list of dictionaries, each containing 'optimizer' and an optional 'scheduler' key.
     """
@@ -85,5 +82,5 @@ def get_optimizers_and_schedulers(
     return optimizer_scheduler_pairs
 
 
-def get_metrics(config: Dict[str, Any]) -> Dict[str, metrics.Metric]:
+def get_metrics(config: List[Dict[str, Any]]) -> Dict[str, metrics.Metric]:
     return get_instances("metrics", metrics, create_instance, config)

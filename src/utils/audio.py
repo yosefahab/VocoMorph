@@ -63,19 +63,17 @@ def save_audio(
 
 
 def load_audio(
-    filepath: str, sr: Optional[int] = None, channels: int = 1
+    filepath: Path, sr: Optional[int] = None, channels: int = 1
 ) -> Tuple[np.ndarray, int]:
     """
     Loads an audio file with optional resampling and ensures (C, T) shape.
-
     Args:
     - filepath: Path to the audio file.
     - sr: Target sample rate (optional).
     - channels: Number of output channels (1 = mono, 2 = stereo).
-
     Returns:
-    - audio: (C, T) NumPy array where C is 1 or 2.
-    - sr_out: Sample rate of the loaded audio.
+        audio: (C, T) NumPy array where C is 1 or 2.
+        sr_out: Sample rate of the loaded audio.
     """
     sr_float = float(sr) if sr is not None else None
     audio, sr_out = librosa.load(filepath, sr=sr_float, mono=False)

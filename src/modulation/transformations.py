@@ -4,7 +4,7 @@ import librosa
 import numpy as np
 
 
-def identity_transform(audio: np.ndarray, sr: int) -> np.ndarray:
+def identity_transform(audio: np.ndarray, _sr: int) -> np.ndarray:
     return audio
 
 
@@ -32,7 +32,7 @@ def convert_to_mono(audio: np.ndarray) -> np.ndarray:
     return audio
 
 
-def apply_time_stretch(audio: np.ndarray, sr: int, rate: float = 0.7) -> np.ndarray:
+def apply_time_stretch(audio: np.ndarray, _sr: int, rate: float = 0.7) -> np.ndarray:
     """
     Stretches or compresses the audio in time without altering pitch.
     """

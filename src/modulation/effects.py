@@ -82,7 +82,6 @@ def apply_echo(
 ) -> np.ndarray:
     """
     Apply an echo effect with progressively fading echoes.
-
     Args:
     - audio: Input audio signal (1D NumPy array)
     - sr: Sample rate of the audio

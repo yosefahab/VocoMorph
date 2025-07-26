@@ -11,7 +11,6 @@ def generate_carrier(
 ) -> np.ndarray:
     """
     generates a carrier wave for vocoding
-
     Args:
     - wave_type: ["sawtooth", "square", "noise", "sine"]
     """
@@ -73,12 +72,10 @@ def generate_noise(
 ) -> np.ndarray:
     """
     Generates noise to add to an audio signal.
-
     Args:
     - shape: returned array shape
     - noise_level: The intensity of the noise (scaled between 0 and 1).
     - noise_type: Type of noise ("white", "pink", "brown").
-
     Returns:
         np.ndarray: Noise signal of the same shape as the input audio.
     """
@@ -96,7 +93,7 @@ def generate_noise(
         pink = signal.lfilter(b, a, white)
         noise = pink / np.max(np.abs(pink))
 
-    elif noise_type == "brown":
+    else:
         brown = np.cumsum(np.random.normal(0, 1, shape))
         noise = brown / np.max(np.abs(brown))  # normalize to keep levels consistent
 

@@ -17,10 +17,9 @@ logger = get_logger(__name__)
 def create_split_csv(dataset_dir: Path, output_csv: Path):
     """
     Scans the dataset directory and creates a CSV with raw audio file paths.
-
     Args:
-        dataset_dir: Path to the dataset directory.
-        output_csv: Path to save the full dataset CSV.
+    - dataset_dir: Path to the dataset directory.
+    - output_csv: Path to save the full dataset CSV.
     """
     if not dataset_dir.exists():
         logger.critical(f"{dataset_dir} does not exist! Terminating.")
@@ -52,12 +51,11 @@ def split_dataset_csv(
 ):
     """
     Splits a dataset CSV into train and validation CSVs.
-
     Args:
-        input_csv: Path to the full dataset CSV.
-        output_csv: Path to save the validation CSV.
-        split_ratio: (train, validation) split ratios.
-        shuffle: whether to shuffle the rows before splitting.
+    - input_csv: Path to the full dataset CSV.
+    - output_csv: Path to save the validation CSV.
+    - split_ratio: (train, validation) split ratios.
+    - shuffle: whether to shuffle the rows before splitting.
     """
     assert input_csv.exists(), f"{input_csv} does not exist"
     logger.info(f"Splitting {input_csv} into {split_ratio}")
@@ -87,7 +85,7 @@ def _augment_wav(args: Tuple[pd.Series, int, Path, List[str]]):
     row, sr, output_dir, effects = args
     # wav_id = str(row["ID"]).zfill(7)
     wav_id = row["ID"]
-    raw_wav_path = str(row["raw_wav_path"])
+    raw_wav_path = Path(str(row["raw_wav_path"]))
 
     raw_wave, _ = load_audio(raw_wav_path, sr)
 
@@ -120,13 +118,12 @@ def augment_files(
 ):
     """
     Reads a dataset CSV, applies effects in parallel, and saves outputs to a new CSV.
-
     Args:
-        input_csv: Path to train/valid/test CSV.
-        sr: Sample rate of the waves.
-        effects: List of effects to apply.
-        output_dir: Where to save the output waves.
-        output_csv: Path to save the new CSV with augmented file information.
+    - input_csv: Path to train/valid/test CSV.
+    - sr: Sample rate of the waves.
+    - effects: List of effects to apply.
+    - output_dir: Where to save the output waves.
+    - output_csv: Path to save the new CSV with augmented file information.
     """
     df = pd.read_csv(input_csv, dtype={"ID": str})
     logger.info(f"Augmenting waves from {input_csv} ({len(df)} total)")

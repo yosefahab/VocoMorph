@@ -50,12 +50,10 @@ def plot_wave_and_augmented_wave(
 def call_functions_by_name(function_names: List[str], *args, **kwargs) -> list:
     """
     Dynamically loads and calls functions from the specified module.
-
     Args:
     - function_names: List of function names to call.
     - args: Positional arguments to pass to each function.
     - kwargs: Keyword arguments to pass to each function.
-
     Returns:
         functions' results
     """

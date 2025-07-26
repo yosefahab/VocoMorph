@@ -164,8 +164,8 @@ class SISNRLoss:
         """
         Compute Scale-Invariant Signal-to-Noise Ratio (SI-SNR) loss.
         Args:
-            preds: (B, T)
-            targets: (B, T)
+        - preds: (B, T)
+        - targets: (B, T)
         Returns:
             Negative SI-SNR as a loss (scalar)
         """

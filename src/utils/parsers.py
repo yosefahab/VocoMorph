@@ -5,10 +5,8 @@ from pathlib import Path
 def parse_yaml(yaml_path: Path) -> dict:
     """
     Parse and return the contents of a YAML file.
-
     Args:
-        path: Path to the YAML file to be parsed.
-
+    - path: Path to the YAML file to be parsed.
     Returns:
         dict: A dictionary containing the parsed contents of the YAML file.
     """

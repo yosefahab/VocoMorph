@@ -10,10 +10,8 @@ logger = get_logger(__name__)
 def get_device(device_type: Literal["cpu", "gpu"] = "gpu") -> torch.device:
     """
     Selects device for executing models on (cpu, cuda, or mps)
-
     Args:
-        device_type: type of device, (cpu or gpu)
-
+    - device_type: type of device, (cpu or gpu)
     Returns:
         torch.device.
     """

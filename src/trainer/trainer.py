@@ -1,11 +1,12 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import torch
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
 from torch.nn.utils import clip_grad_norm_
+from torch.types import Tensor
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
 from torchinfo import summary
@@ -46,12 +47,12 @@ class ModelTrainer:
             self.config["optimizers"], model.parameters()
         )
 
-        self.optimizers = []
-        self.schedulers = []
-        for item in self.optimizers_and_schedulers:
-            self.optimizers.append(item["optimizer"])
-            if item["scheduler"] is not None:
-                self.schedulers.append(item["scheduler"])
+        self.optimizers: List[torch.optim.Optimizer] = []
+        self.schedulers: List[torch.optim.lr_scheduler._LRScheduler] = []
+        for optimizer, scheduler in self.optimizers_and_schedulers:
+            self.optimizers.append(optimizer)
+            if scheduler is not None:
+                self.schedulers.append(scheduler)
 
         self.start_scheduling = config["trainer"]["start_scheduling"]
         self.grad_accum_steps = self.config["trainer"].get("grad_accumulation_steps", 1)
@@ -133,17 +134,15 @@ class ModelTrainer:
 
         if isinstance(dummy_cfg, list):
             tensors = tuple(make_tensor(item) for item in dummy_cfg)
-            return tensors if len(tensors) > 1 else tensors[0]
+            assert len(tensors) >= 0
+            return tensors if len(tensors) > 1 else tensors[0]  # pyright: ignore[reportGeneralTypeIssues]
         elif isinstance(dummy_cfg, dict):
             return {k: make_tensor(v) for k, v in dummy_cfg.items()}
         else:
             return make_tensor(dummy_cfg)
 
     def _log_tensorboard_metrics(
-        self,
-        epoch: int,
-        train_metrics: dict,
-        val_metrics: dict,
+        self, epoch: int, train_metrics: dict, val_metrics: dict
     ):
         self.logger.info("Logging metrics to tensorboard")
 
@@ -181,15 +180,13 @@ class ModelTrainer:
                 epoch,
             )
 
-        for item in self.optimizers_and_schedulers:
-            optimizer = item["optimizer"]
-            optimizer_name = optimizer.__class__.__name__
+        for optimizer, _ in self.optimizers_and_schedulers:
             lr_group = {}
             for i, param_group in enumerate(optimizer.param_groups):
                 lr_group[f"g{i}"] = param_group["lr"]
 
             self.tensorboard_writer.add_scalars(
-                f"LR/{optimizer_name}",
+                f"LR/{optimizer.__class__.__name__}",
                 lr_group,
                 epoch,
             )
@@ -197,14 +194,10 @@ class ModelTrainer:
         self.tensorboard_writer.flush()
 
     def _update_schedulers(
-        self,
-        step: bool = False,
-        epoch: bool = False,
-        val_loss: Optional[float] = None,
+        self, step: bool = False, epoch: bool = False, val_loss: Optional[float] = None
     ):
         """
         Update learning rate schedulers.
-
         Args:
         - step: If True, update step-based schedulers (called per batch).
         - epoch: If True, update epoch-based schedulers (called per epoch).
@@ -213,8 +206,7 @@ class ModelTrainer:
         if not self.optimizers_and_schedulers:
             return
 
-        for item in self.optimizers_and_schedulers:
-            scheduler = item["scheduler"]
+        for _, scheduler in self.optimizers_and_schedulers:
             if scheduler is None:
                 continue
 
@@ -249,7 +241,7 @@ class ModelTrainer:
             ):
                 scheduler.step()  # update epoch-based schedulers
 
-    def _update_metrics(self, logits: torch.Tensor, targets: torch.Tensor):
+    def _update_metrics(self, logits: Tensor, targets: Tensor):
         """Updates each evaluation metric"""
         for metric in self.metrics.values():
             metric.update(
@@ -275,26 +267,26 @@ class ModelTrainer:
         return results
 
     def _compute_weighted_losses(
-        self, logits: torch.Tensor, targets: torch.Tensor
-    ) -> Tuple[float, dict]:
-        weighted_losses = {}
+        self, logits: Tensor, targets: Tensor
+    ) -> Tuple[Tensor, Dict[str, Tensor]]:
+        weighted_losses: dict[str, Tensor] = {}
 
         for name, criterion in self.criterions.items():
-            raw_loss = criterion(logits, targets)
-
+            raw_loss: Tensor = criterion(logits, targets)
             weighted_loss = raw_loss * self.criterions_stats[name]["weight"]
             weighted_losses[name] = weighted_loss
 
         # sum weighted individual losses to get the total loss for this batch
         total_weighted_loss = sum(weighted_losses.values())
 
+        assert isinstance(total_weighted_loss, Tensor)
         return total_weighted_loss, weighted_losses
 
-    def _accumulate_and_step(self, loss: torch.Tensor, step: int, total_steps: int):
+    def _accumulate_and_step(self, loss: Tensor, step: int, total_steps: int):
         # clear gradients
         if (step + 1) % self.grad_accum_steps == 0 or (step + 1) == total_steps:
-            for item in self.optimizers_and_schedulers:
-                item["optimizer"].zero_grad()
+            for optimizer, _ in self.optimizers_and_schedulers:
+                optimizer.zero_grad()
 
         # perform backward pass
         if self.scaler:
@@ -304,8 +296,7 @@ class ModelTrainer:
 
         # if reached grad_accum_steps, step schedulers & optimizer and update scaler
         if (step + 1) % self.grad_accum_steps == 0 or (step + 1) == total_steps:
-            for item in self.optimizers_and_schedulers:
-                optimizer = item["optimizer"]
+            for optimizer, _ in self.optimizers_and_schedulers:
                 if self.clip_norm:
                     if self.scaler:
                         self.scaler.unscale_(optimizer)
@@ -322,9 +313,9 @@ class ModelTrainer:
     def _train_one_epoch(self, data_loader: DataLoader) -> dict:
         """
         Args:
-            data_loader: DataLoader for training data.
+        - data_loader: DataLoader for training data.
         Returns:
-        - Epoch training metrics. Check compute_metrics() for more details.
+            Epoch training metrics. Check compute_metrics() for more details.
         """
         self.model.train()
         running_total_weighted_loss = 0.0
@@ -388,10 +379,10 @@ class ModelTrainer:
         """
         Train the model over multiple epochs. The last checkpoint is automatically loaded.
         Args:
-            max_epochs: maximum number of epochs to train the model for.
-            train_loader: training set DataLoader.
-            val_loader: validation set DataLoader.
-            test_loader: optional test set DataLoader.
+        - max_epochs: maximum number of epochs to train the model for.
+        - train_loader: training set DataLoader.
+        - val_loader: validation set DataLoader.
+        - test_loader: optional test set DataLoader.
         """
         # create logs dir and tensorboard self.loggers for current training run
         self._open_writer()
@@ -440,10 +431,10 @@ class ModelTrainer:
     ) -> dict:
         """
         Args:
-            data_loader: validation set DataLoader.
-            output_dir: optional directory to save intermediate outputs
+        - data_loader: validation set DataLoader.
+        - output_dir: optional directory to save intermediate outputs
         Returns:
-        - Evaluation metrics. Check compute_metrics() for more details.
+            Evaluation metrics. Check compute_metrics() for more details.
         """
         self.model.eval()
         with torch.no_grad():
@@ -464,7 +455,10 @@ class ModelTrainer:
                 if output_dir is not None:
                     # ensure logits are on CPU and detached before saving
                     save_audio(
-                        logits.cpu().detach(), data_loader.dataset.fs, id, output_dir
+                        logits.cpu().detach(),
+                        data_loader.dataset.fs,  # pyright: ignore[reportAttributeAccessIssue]
+                        id,
+                        output_dir,
                     )
 
                 total_weighted_loss, weighted_losses = self._compute_weighted_losses(
@@ -498,7 +492,7 @@ class ModelTrainer:
         """
         Evaluate the model on the test data
         Args:
-            test_loader: test DataLoader.
+        - test_loader: test DataLoader.
         """
         self.logger.info("Testing model")
         if output_dir is not None:

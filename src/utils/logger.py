@@ -1,5 +1,4 @@
 import logging
-import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import List
@@ -36,12 +35,11 @@ def setup_logging(
 ):
     """
     Sets up logging for the application.
-
     Args:
-        log_level: The logging level.
-        log_to_file: Whether to log to a file.
-        max_file_size: Max log file size in bytes before rotating (defaults to 5MB).
-        backup_count: Number of backup log files to keep.
+    - log_level: The logging level.
+    - log_to_file: Whether to log to a file.
+    - max_file_size: Max log file size in bytes before rotating (defaults to 5MB).
+    - backup_count: Number of backup log files to keep.
     """
     log_dir.mkdir(exist_ok=True)
 

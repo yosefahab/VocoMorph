@@ -14,7 +14,7 @@ class WarmupConstantSchedule(torch.optim.lr_scheduler.LambdaLR):
 
     @staticmethod
     def _lr_lambda(step: int, warmup_steps: int) -> float:
-        """Learning rate schedule with linear warmup to constant value (static method)."""
+        """Learning rate schedule with linear warmup to constant value."""
         if step < warmup_steps:
             return float(step) / float(warmup_steps)
         return 1.0

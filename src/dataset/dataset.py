@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 
 class VocoMorphDataset(Dataset):
-    def __init__(self, config: dict, datalist_filepath: str) -> None:
+    def __init__(self, config: dict, datalist_filepath: Path) -> None:
         super().__init__()
 
         self.fs = config["sample_rate"]
@@ -106,9 +106,8 @@ def collate_fn(batch, max_length):
 def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
     """
     Args:
-        splits: the splits to create dataloaders for (train/valid/test)
-        config: dataset configuration dict
-
+    - splits: the splits to create dataloaders for (train/valid/test)
+    - config: dataset configuration dict
     Returns:
         dict containing dataloader for each split
     """

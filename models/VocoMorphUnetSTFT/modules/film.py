@@ -16,8 +16,8 @@ class FiLM(nn.Module):
     def forward(self, feature_map, embedding):
         """
         Args:
-            feature_map (torch.Tensor): Input feature map (B, C, H, W).
-            embedding (torch.Tensor): Conditioning embedding (B, embedding_dim).
+        - feature_map (torch.Tensor): Input feature map (B, C, H, W).
+        - embedding (torch.Tensor): Conditioning embedding (B, embedding_dim).
         Returns:
             torch.Tensor: Modulated feature map.
         """
