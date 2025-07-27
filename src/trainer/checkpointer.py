@@ -16,11 +16,12 @@ class Checkpointer:
     def __init__(
         self,
         config: dict,
-        model: torch.nn.Module,
+        model: torch.nn.Module | torch.nn.DataParallel,
         optimizers: Optional[List[torch.optim.Optimizer]],
         schedulers: Optional[List[torch.optim.lr_scheduler._LRScheduler]],
         scaler: Optional[torch.GradScaler],
         checkpoints_dir: Path,
+        is_distributed: bool = False,
     ):
         """
         Handles saving and loading checkpoints with configurable strategies.
@@ -33,6 +34,7 @@ class Checkpointer:
         """
         self.logger = get_logger(self.__class__.__name__)
 
+        self.is_distributed = is_distributed
         self.config = config
         self.checkpoint_path = config.get("checkpoint_path", None)
         if self.checkpoint_path:
@@ -68,6 +70,8 @@ class Checkpointer:
         - epoch: The current epoch number.
         - val_loss: Validation loss (used if checkpointer is configured with save_best=True).
         """
+        if self.is_distributed and torch.distributed.get_rank() != 0:
+            return
         if self.save_best and val_loss is not None:
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
@@ -178,15 +182,15 @@ class Checkpointer:
                 ):
                     sch.load_state_dict(state)
 
-        if self.scaler:
-            if "scaler_state_dict" not in checkpoint:
+        if self.scaler is not None:
+            if self._SCALER_STATE not in checkpoint:
                 self.logger.error(
                     "scaler_state_dict missing from checkpoint state dict"
                 )
-            elif checkpoint["scaler_state_dict"] is not None:
-                self.scaler.load_state_dict(checkpoint["scaler_state_dict"])
+            elif checkpoint[self._SCALER_STATE] is not None:
+                self.scaler.load_state_dict(checkpoint[self._SCALER_STATE])
 
-        return checkpoint.get("epoch", 1)
+        return checkpoint.get("epoch", 0) + 1
 
     def _get_latest_checkpoint(self, prioritize_best: bool = True) -> Optional[Path]:
         """
