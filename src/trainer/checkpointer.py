@@ -4,6 +4,7 @@ from typing import List, Optional
 import torch
 
 from src.utils.logger import get_logger
+from src.utils.types import DictConfig
 
 
 class Checkpointer:
@@ -15,34 +16,38 @@ class Checkpointer:
 
     def __init__(
         self,
-        config: dict,
-        model: torch.nn.Module | torch.nn.DataParallel,
-        optimizers: Optional[List[torch.optim.Optimizer]],
-        schedulers: Optional[List[torch.optim.lr_scheduler._LRScheduler]],
-        scaler: Optional[torch.GradScaler],
         checkpoints_dir: Path,
-        is_distributed: bool = False,
+        config: DictConfig,
+        model: torch.nn.Module | torch.nn.DataParallel,
+        optimizers: List[torch.optim.Optimizer],
+        schedulers: List[Optional[torch.optim.lr_scheduler._LRScheduler]] = [],
+        scaler: Optional[torch.GradScaler] = None,
     ):
         """
         Handles saving and loading checkpoints with configurable strategies.
+
         Args:
-        - model: The model to save/load.
-        - optimizers: List of optimizers.
-        - schedulers: List of schedulers.
-        - scaler: Gradient scaler (if using mixed precision).
-        - checkpoint_dir: Directory where checkpoints are stored.
+            config: Dictionary with configuration keys (e.g., save_interval, save_best, keep_last_n).
+            model: Model to save/load.
+            optimizers: List of optimizers.
+            schedulers: List of schedulers (can contain None).
+            scaler: AMP gradient scaler.
+            checkpoints_dir: Path to save checkpoints.
         """
         self.logger = get_logger(self.__class__.__name__)
 
-        self.is_distributed = is_distributed
         self.config = config
-        self.checkpoint_path = config.get("checkpoint_path", None)
-        if self.checkpoint_path:
-            self.logger.info(f"Starting from checkpoint: {self.checkpoint_path}")
+        checkpoint_path = config.get("checkpoint_path")
+        self.checkpoint_path = Path(checkpoint_path) if checkpoint_path else None
+
+        if self.checkpoint_path and not self.checkpoint_path.exists():
+            self.logger.warning(
+                f"Found checkpoint path in config file that doesn't exist: {self.checkpoint_path}"
+            )
 
         self.model = model
-        self.optimizers = optimizers
-        self.schedulers = schedulers
+        self.optimizers = optimizers or []
+        self.schedulers = schedulers or []
         self.scaler = scaler
         self.checkpoint_dir = checkpoints_dir
 
@@ -65,45 +70,42 @@ class Checkpointer:
 
     def save_checkpoint(self, epoch: int, val_loss: Optional[float] = None):
         """
-        Saves a model checkpoint with different strategies.
+        Saves a model checkpoint based on strategy configuration.
+
         Args:
-        - epoch: The current epoch number.
-        - val_loss: Validation loss (used if checkpointer is configured with save_best=True).
+            epoch: Current training epoch.
+            val_loss: Optional validation loss for best-checkpoint tracking.
         """
-        if self.is_distributed and torch.distributed.get_rank() != 0:
-            return
-        if self.save_best and val_loss is not None:
-            if val_loss < self.best_val_loss:
-                self.best_val_loss = val_loss
-                checkpoint_path = self.checkpoint_dir.joinpath("best_checkpoint.pt")
-                self._save_to_disk(checkpoint_path, epoch)
-                self.logger.info(
-                    f"New best model saved per best (val_loss={val_loss:.4f})"
-                )
-                return
+        if self.save_best and val_loss is not None and val_loss < self.best_val_loss:
+            self.best_val_loss = val_loss
+            checkpoint_path = self.checkpoint_dir.joinpath("best_checkpoint.pt")
+            self._save_to_disk(checkpoint_path, epoch)
+            self.logger.info(f"New best model saved per best (val_loss={val_loss:.4f})")
 
         checkpoint_path = self.checkpoint_dir.joinpath(f"ckpt_epoch_{epoch}.pt")
         self._save_to_disk(checkpoint_path, epoch)
+
         if epoch % self.save_interval == 0:
             self.logger.info(
                 f"New checkpoint saved per save_interval: {self.save_interval}"
             )
-
-            # remove old checkpoints if keep_last_n is set
             if self.keep_last_n:
                 self._cleanup_old_checkpoints()
 
     def _save_to_disk(self, checkpoint_path: Path, epoch: int):
         """
-        Saves model and optimizer states to disk as well as schedulers, grad scalers if they exist.
+        Internal: Save model and training states to disk.
+
+        Args:
+            checkpoint_path: Filepath to save to.
+            epoch: Current epoch.
         """
-        optimizers_states_dicts = (
-            [opt.state_dict() for opt in self.optimizers] if self.optimizers else None
-        )
-        schedulers_states_dicts = (
-            [sch.state_dict() for sch in self.schedulers] if self.schedulers else None
-        )
+        optimizers_states_dicts = [opt.state_dict() for opt in self.optimizers]
+        schedulers_states_dicts = [
+            sch.state_dict() if sch is not None else None for sch in self.schedulers
+        ]
         scaler_state_dict = self.scaler.state_dict() if self.scaler else None
+
         torch.save(
             {
                 self._MODEL_STATE: self.model.state_dict(),
@@ -118,18 +120,12 @@ class Checkpointer:
 
     def _cleanup_old_checkpoints(self):
         """
-        Removes old checkpoints if the number of saved checkpoints exceeds keep_last_n.
+        Removes older checkpoints if total exceeds `keep_last_n`.
         """
-
         checkpoints = list(self.checkpoint_dir.glob("ckpt_epoch_*.pt"))
-        checkpoint_files = sorted(
-            checkpoints,
-            key=lambda f: int(f.stem.split("_")[-1]),
-        )
+        checkpoint_files = sorted(checkpoints, key=lambda f: int(f.stem.split("_")[-1]))
 
-        assert isinstance(self.keep_last_n, int), (
-            "keep_last_n must be an int to use this feature"
-        )
+        assert isinstance(self.keep_last_n, int)
 
         if len(checkpoint_files) <= self.keep_last_n:
             return
@@ -140,51 +136,61 @@ class Checkpointer:
             old_checkpoint.unlink()
             self.logger.info(f"Removed old checkpoint: {old_checkpoint}")
 
-    def load_checkpoint(self, device: torch.device) -> int:
+    def load_checkpoint(
+        self,
+        device: torch.device,
+        prioritize_best: bool = True,
+        custom_path: Optional[Path] = None,
+    ) -> int:
         """
-        Loads a checkpoint (latest if no path is specified).
+        Loads a checkpoint into model and training components using the path specified in the model config file.
         Args:
-        - checkpoint_path: Path to a specific checkpoint (optional).
+        - device: Device to map loaded state.
         Returns:
-            The epoch number to resume from.
+            Epoch number to resume from (epoch + 1).
         """
-        if self.checkpoint_path is None:
-            self.checkpoint_path = self._get_latest_checkpoint()
-            if self.checkpoint_path is None:
-                self.logger.info("No checkpoints found, starting from scratch.")
+        checkpoint_path = custom_path or self.checkpoint_path
+        if checkpoint_path is None:
+            checkpoint_path = self.checkpoint_path = self._get_latest_checkpoint(
+                prioritize_best
+            )
+            if checkpoint_path is None:
+                self.logger.warning("No checkpoints found, starting from scratch.")
                 return 1
+        else:
+            assert checkpoint_path.exists()
 
         self.logger.info(f"Loading checkpoint from {self.checkpoint_path}")
         checkpoint = torch.load(
-            self.checkpoint_path, map_location=device, weights_only=False
+            checkpoint_path, map_location=device, weights_only=False
         )
         self.model.load_state_dict(checkpoint[self._MODEL_STATE])
 
-        if self.optimizers:
-            if self._OPTIMIZER_STATES not in checkpoint:
-                self.logger.error(
-                    f"{self._OPTIMIZER_STATES} missing from checkpoint state dict"
-                )
-            else:
-                for opt, state in zip(
-                    self.optimizers, checkpoint[self._OPTIMIZER_STATES]
-                ):
-                    opt.load_state_dict(state)
+        if self._OPTIMIZER_STATES not in checkpoint:
+            self.logger.error(
+                f"{self._OPTIMIZER_STATES} missing from checkpoint state dict"
+            )
+        else:
+            print(len(checkpoint[self._OPTIMIZER_STATES]), len(self.optimizers))
+            for opt, state in zip(
+                self.optimizers, checkpoint[self._OPTIMIZER_STATES], strict=True
+            ):
+                opt.load_state_dict(state)
 
-        if self.schedulers is not None:
-            if self._SCHEDULER_STATES not in checkpoint:
-                self.logger.error(
-                    f"{self._SCHEDULER_STATES} missing from checkpoint state dict"
-                )
-            else:
-                for sch, state in zip(
-                    self.schedulers, checkpoint[self._SCHEDULER_STATES]
-                ):
+        if self._SCHEDULER_STATES not in checkpoint:
+            self.logger.warning(
+                f"{self._SCHEDULER_STATES} missing from checkpoint state dict"
+            )
+        else:
+            for sch, state in zip(
+                self.schedulers, checkpoint[self._SCHEDULER_STATES], strict=True
+            ):
+                if sch is not None:
                     sch.load_state_dict(state)
 
         if self.scaler is not None:
             if self._SCALER_STATE not in checkpoint:
-                self.logger.error(
+                self.logger.warning(
                     "scaler_state_dict missing from checkpoint state dict"
                 )
             elif checkpoint[self._SCALER_STATE] is not None:
@@ -194,11 +200,13 @@ class Checkpointer:
 
     def _get_latest_checkpoint(self, prioritize_best: bool = True) -> Optional[Path]:
         """
-        Finds the latest checkpoint in the directory.
+        Returns latest checkpoint path or best if found first.
+
         Args:
-        - prioritize_best: If True, return 'best_checkpoint.pt' if it exists.
+            prioritize_best: Prefer 'best_checkpoint.pt' if it exists.
+
         Returns:
-            Path to the latest checkpoint, or None if none found.
+            Path to latest or best checkpoint, or None if none exist.
         """
         if prioritize_best:
             best_ckpt = self.checkpoint_dir.joinpath("best_checkpoint.pt")
@@ -211,3 +219,8 @@ class Checkpointer:
 
         checkpoints.sort(key=lambda f: int(f.stem.split("_")[-1]))
         return checkpoints[-1]
+
+
+class NullCheckpointer(Checkpointer):
+    def save_checkpoint(self, epoch: int, val_loss: Optional[float] = None):
+        pass

@@ -49,7 +49,7 @@ def download_file(url: str, dest_path: Path) -> bool:
 def extract_tarfile(tar_path: Path, extract_path: Path) -> bool:
     """Extracts a tar.gz file into the given directory."""
     try:
-        logger.info(f"extracting tar: {tar_path}")
+        logger.info(f"Extracting tar: {tar_path}")
         with tarfile.open(tar_path, "r:gz") as tar:
             tar.extractall(extract_path)
         logger.info(f"Extracted {tar_path} to {extract_path}")

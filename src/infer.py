@@ -5,7 +5,9 @@ import torch
 import torch.nn as nn
 
 from src.utils.audio import load_audio, save_audio
+from src.utils.device import get_device
 from src.utils.logger import get_logger
+from src.utils.types import DeviceType
 
 logger = get_logger(__name__)
 
@@ -15,9 +17,10 @@ def infer(
     filepath: Path,
     model: nn.Module,
     config: dict,
-    device: torch.device,
+    device_type: DeviceType,
     output_path: Optional[Path] = None,
 ):
+    device = get_device(device_type)
     logger.info(f"Running inference on: {filepath} with EID: {effect_id}")
     sr = config["data"]["sample_rate"]
     channels = config["data"]["channels"]

@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset
+from torch.utils.data.distributed import DistributedSampler
 
 from src.utils.audio import load_audio
 from src.utils.logger import get_logger
@@ -19,6 +20,7 @@ class VocoMorphDataset(Dataset):
     def __init__(self, config: dict, datalist_filepath: Path) -> None:
         super().__init__()
 
+        self.logger = get_logger(self.__class__.__name__)
         self.fs = config["sample_rate"]
         self.channels = config["channels"]
         self.frame_length = config["frame_length"]
@@ -26,10 +28,9 @@ class VocoMorphDataset(Dataset):
         self.datalist_filepath = datalist_filepath
 
         self.df = pd.read_csv(datalist_filepath)
-        self.df = self.df
 
         self.n = len(self.df)
-        logger.info(f"Dataset records = {self.n}")
+        self.logger.info(f"Dataset records = {self.n}")
 
     def __len__(self) -> int:
         return self.n
@@ -45,7 +46,7 @@ class VocoMorphDataset(Dataset):
         - modulated wave (C, frame_length)
         """
         row = self.df.iloc[index]
-        id = row["ID"]
+        id: int = row["ID"]
         effect_id = row["effect_id"]
         raw_path = row["raw_wav_path"]
         modulated_path = row["modulated_wav_path"]
@@ -60,14 +61,7 @@ class VocoMorphDataset(Dataset):
         modulated_wave = torch.tensor(modulated_wave)
         effect_id = torch.tensor(effect_id, dtype=torch.long).unsqueeze(0)
 
-        return (
-            (
-                id,
-                effect_id,
-                raw_wave,
-            ),
-            modulated_wave,
-        )
+        return ((id, effect_id, raw_wave), modulated_wave)
 
 
 def collate_fn(batch, max_length):
@@ -95,19 +89,17 @@ def collate_fn(batch, max_length):
     raw_waves = torch.stack([pad_wave(w, max_length) for w in raw_waves])
     modulated_waves = torch.stack([pad_wave(w, max_length) for w in modulated_waves])
 
-    return (
-        ids,
-        effect_ids,
-        raw_waves,
-        modulated_waves,
-    )
+    return (ids, effect_ids, raw_waves, modulated_waves)
 
 
-def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
+def get_dataloaders(
+    splits: List[str], config: dict, ddp: bool = False
+) -> Dict[str, DataLoader]:
     """
     Args:
     - splits: the splits to create dataloaders for (train/valid/test)
     - config: dataset configuration dict
+    - is_distributed: whether to support distributed training. This passes a DistributedSampler to the dataloader
     Returns:
         dict containing dataloader for each split
     """
@@ -128,14 +120,25 @@ def get_dataloaders(splits: List[str], config: dict) -> Dict[str, DataLoader]:
         logger.info(f"Creating dataloader for split: {split}")
         split_batch_size = config["datalists"][split]["batch_size"]
         logger.info(f"Using batch size {split_batch_size} for split: {split}")
+
+        drop_last = config["drop_last"] if split == "train" else False
+
+        sampler = None
+        if ddp:
+            logger.info(f"Creating DDP sampler for split: {split}")
+            sampler = DistributedSampler(
+                dataset=dataset, shuffle=(split == "train"), drop_last=drop_last
+            )
+
         dataloader = DataLoader(
             dataset=dataset,
             batch_size=split_batch_size,
-            shuffle=(split == "train"),
+            shuffle=(split == "train" and not ddp),
             pin_memory=config["pin_memory"],
             num_workers=num_workers,
-            drop_last=config["drop_last"] if split == "train" else False,
+            drop_last=drop_last,
             collate_fn=collate_fn_partial,
+            sampler=sampler,
         )
         dataloaders[split] = dataloader
 

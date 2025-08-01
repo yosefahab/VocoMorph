@@ -4,7 +4,7 @@ import librosa
 import numpy as np
 
 
-def identity_transform(audio: np.ndarray, _sr: int) -> np.ndarray:
+def identity_transform(audio: np.ndarray, sr: int) -> np.ndarray:
     return audio
 
 

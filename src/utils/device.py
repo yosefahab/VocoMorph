@@ -1,17 +1,17 @@
-from typing import Literal
-
 import torch
 
 from src.utils.logger import get_logger
+from src.utils.types import DeviceType
 
 logger = get_logger(__name__)
 
 
-def get_device(device_type: Literal["cpu", "gpu"] = "gpu") -> torch.device:
+def get_device(device_type: DeviceType = "gpu", local_rank: int = 0) -> torch.device:
     """
     Selects device for executing models on (cpu, cuda, or mps)
     Args:
     - device_type: type of device, (cpu or gpu)
+    - local_rank: the device ID if using multi gpu
     Returns:
         torch.device.
     """
@@ -19,7 +19,7 @@ def get_device(device_type: Literal["cpu", "gpu"] = "gpu") -> torch.device:
         if torch.backends.mps.is_available():
             device = "mps"
         elif torch.cuda.is_available():
-            device = "cuda"
+            device = f"cuda:{local_rank}"
         else:
             logger.warning("No GPU detected, using CPU")
             device = "cpu"

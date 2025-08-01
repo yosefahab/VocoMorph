@@ -2,99 +2,27 @@ import math
 
 import torch
 
-from src.dataset.generate_dataset import apply_effects
-from src.modulation.effects import *
-from src.modulation.filters import *
-from src.modulation.synthesis import *
-from src.modulation.transformations import *
-from src.modulation.utils import plot_tensors, plot_waves
 from src.trainer.custom.criterions import *
-from src.utils.audio import load_audio, save_audio
-from src.utils.logger import get_logger
-
-logger = get_logger(__name__)
-
-
-def stft(x, n_fft, hop_length, win_length, window):
-    if x.ndim == 1:
-        x = x.unsqueeze(0)
-    if not isinstance(x, torch.Tensor):
-        x = torch.Tensor(x)
-
-    stft_output = torch.stft(
-        x,
-        n_fft=n_fft,
-        hop_length=hop_length,
-        win_length=win_length,
-        window=window,
-        center=False,
-        return_complex=True,
-    )
-    _, F, TT = stft_output.shape
-    return stft_output.view(1, F, TT)
-
-
-def compare_audios(config: dict):
-    logger.info("Running comparison test")
-    sr = config["sample_rate"]
-    channels = config["channels"]
-    n_fft = config["n_fft"]
-    hop_length = config["hop_length"]
-    win_length = config["win_length"]
-    window = torch.hann_window(win_length)
-
-    waves = [
-        "data/timit/TEST/DR4/MGMM0/SA2.WAV",
-        "data/timit/modulated/00001_e0.wav",
-        "data/timit/modulated/00001_e1.wav",
-        "data/timit/modulated/00001_e2.wav",
-        "data/timit/modulated/00001_e3.wav",
-        "data/timit/modulated/00001_e4.wav",
-    ]
-    audios = [load_audio(w, sr=sr, channels=channels)[0] for w in waves]
-    specs = [stft(a, n_fft, hop_length, win_length, window) for a in audios]
-    plot_waves([(a, sr) for a in audios])
-    plot_tensors(specs)
-
-
-def main(config: dict):
-    logger.info(f"Running tests from {__name__}")
-    compare_audios(config)
-    test_loss_functions(config)
-
-
-def test_apply_effects(config: dict):
-    sr = config["sample_rate"]
-    channels = config["channels"]
-
-    w = "data/TIMIT/TEST/DR1/FAKS0/SA2.WAV"
-    audio, sr = load_audio(w, sr=sr, channels=channels)
-
-    for i, a in enumerate(apply_effects(audio, sr, config["effects"])):
-        save_audio(a, sr, f"audio_e{i}")
 
 
 def test_loss_functions(config):
-    logger.info("Running loss functions test")
-    # Define common parameters based on your config
     batch_size = 4
     sample_rate = config["sample_rate"]
     n_fft = config["n_fft"]
     hop_length = config["hop_length"]
     win_length = config["win_length"]
     n_mels = config["n_mels"]
-    audio_length = config["frame_length"]  # Corresponds to your chunk_size
-    num_channels = config["channels"]  # Mono audio
+    audio_length = config["frame_length"]
+    num_channels = config["channels"]
 
     print("Loss Function Test Suite")
     print(
         f"Audio Length: {audio_length}, Batch Size: {batch_size}, Channels: {num_channels}\n"
     )
 
-    # Initialize Loss Functions
     stft_loss_fn = STFTLoss(n_fft, win_length, hop_length)
     multi_res_stft_loss_fn = MultiResolutionSTFTLoss(
-        resolutions=[[1024, 1024, 256], [2048, 2048, 512], [512, 512, 128]],
+        resolutions=[(1024, 1024, 256), (2048, 2048, 512), (512, 512, 128)],
         alpha=1.0,
         beta=0.5,
     )
@@ -122,8 +50,7 @@ def test_loss_functions(config):
         "EnergyLoss": energy_loss_fn,
     }
 
-    # Create Synthetic Data
-    # Target: A sine wave, representing a clean audio signal
+    # synthetic Data
     t = torch.linspace(0, (audio_length - 1) / sample_rate, audio_length, device="cpu")
     targets = 0.5 * torch.sin(2 * math.pi * 440 * t).unsqueeze(0).repeat(
         batch_size, num_channels, 1
@@ -133,7 +60,7 @@ def test_loss_functions(config):
         f"Target signal min/max: {targets.min():.4f}/{targets.max():.4f}, mean: {targets.mean():.4f}, std: {targets.std():.4f}\n"
     )
 
-    # Test Scenarios
+    # test Scenarios
 
     # Scenario 1: Perfect Match
     print("Scenario 1: Perfect Match (logits == targets)")

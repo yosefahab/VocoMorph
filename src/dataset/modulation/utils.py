@@ -58,7 +58,7 @@ def call_functions_by_name(function_names: List[str], *args, **kwargs) -> list:
         functions' results
     """
     results = []
-    module = importlib.import_module("src.modulation.effects")
+    module = importlib.import_module("src.dataset.modulation.effects")
 
     for name in function_names:
         if not hasattr(module, name):

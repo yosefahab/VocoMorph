@@ -30,27 +30,28 @@ def parse_args():
         const="timit",
         help="Download a dataset. Default: timit.",
     )
-
     parser.add_argument(
         "--run-tests",
         action="store_true",
         help="Run the test scripts (not the model).",
     )
-
     parser.add_argument(
         "--model-name",
         type=str,
-        default="VocoMorphBase",
+        default="VocoMorphUnet",
         help="Name of the model to use.",
     )
-
     parser.add_argument(
         "--device",
         choices=["cpu", "gpu"],
         default="gpu",
         help="Specify the device to use: 'cpu' or 'gpu'.",
     )
-
+    parser.add_argument(
+        "--ddp",
+        action="store_true",
+        help="Use distributed data parallel strategy (DDP)",
+    )
     parser.add_argument(
         "--mode",
         choices=["train", "test", "infer_sample"],
@@ -63,7 +64,6 @@ def parse_args():
         default=None,
         help="(Optional) directory to save output WAV files in test mode.",
     )
-
     parser.add_argument(
         "--sample-file",
         type=str,

@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.modulation.utils import call_functions_by_name
+from src.dataset.modulation.utils import call_functions_by_name
 from src.utils.audio import load_audio, save_audio
 from src.utils.logger import get_logger
 

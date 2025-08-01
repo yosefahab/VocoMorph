@@ -1,6 +1,6 @@
-from datetime import datetime
+import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 from torch.amp.autocast_mode import autocast
@@ -8,14 +8,16 @@ from torch.amp.grad_scaler import GradScaler
 from torch.nn.utils import clip_grad_norm_
 from torch.types import Tensor
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard.writer import SummaryWriter
 from torchinfo import summary
 from tqdm import tqdm
 
+from src.trainer.logger import NullLogger, TensorBoardLogger
+from src.trainer.strategy import TrainingStrategy
 from src.utils.audio import save_audio
 from src.utils.logger import get_logger
+from src.utils.types import DeviceType
 
-from .checkpointer import Checkpointer
+from .checkpointer import Checkpointer, NullCheckpointer
 from .factory import get_criterions, get_metrics, get_optimizers_and_schedulers
 
 
@@ -25,15 +27,22 @@ class ModelTrainer:
         config: dict,
         model_dir: Path,
         model: torch.nn.Module,
-        device: torch.device,
+        strategy: TrainingStrategy,
+        device_type: DeviceType,
     ):
-        self.logger = get_logger(self.__class__.__name__)
-        self.config = config
         assert model_dir.exists(), f"Model directory {model_dir} does not exist."
+
+        self.logger = get_logger(self.__class__.__name__)
+
         self.model_dir = model_dir
-        self.device = device
-        self.model = model
-        self.model.to(self.device)
+        self.config = config
+
+        self.strategy = strategy
+
+        if not self.strategy.should_log():
+            self.logger.setLevel(logging.ERROR)
+
+        self.model, self.device = self.strategy.wrap_model(model)
 
         self.clip_norm = self.config["trainer"]["clip_norm"]
 
@@ -43,16 +52,15 @@ class ModelTrainer:
             for c in self.config["criterions"]
         }
 
-        self.optimizers_and_schedulers = get_optimizers_and_schedulers(
-            self.config["optimizers"], model.parameters()
-        )
+        pairs = get_optimizers_and_schedulers(config["optimizers"], model.parameters())
 
-        self.optimizers: List[torch.optim.Optimizer] = []
-        self.schedulers: List[torch.optim.lr_scheduler._LRScheduler] = []
-        for optimizer, scheduler in self.optimizers_and_schedulers:
-            self.optimizers.append(optimizer)
-            if scheduler is not None:
-                self.schedulers.append(scheduler)
+        self.optimizers = []
+        self.schedulers = []
+
+        for o, s in pairs:
+            self.optimizers.append(o)
+            if s is not None:
+                self.schedulers.append(s)
 
         self.start_scheduling = config["trainer"]["start_scheduling"]
         self.grad_accum_steps = self.config["trainer"].get("grad_accumulation_steps", 1)
@@ -69,13 +77,14 @@ class ModelTrainer:
         self.checkpoints_dir = self.model_dir.joinpath("checkpoints")
         self.checkpoints_dir.mkdir(exist_ok=True)
 
-        self.checkpointer = Checkpointer(
+        ckptr_cls = Checkpointer if not self.strategy.should_log() else NullCheckpointer
+        self.checkpointer = ckptr_cls(
+            self.checkpoints_dir,
             self.config["checkpointer"],
             self.model,
             self.optimizers,
             self.schedulers,
             self.scaler,
-            self.checkpoints_dir,
         )
         self._get_model_summary()
 
@@ -141,58 +150,6 @@ class ModelTrainer:
         else:
             return make_tensor(dummy_cfg)
 
-    def _log_tensorboard_metrics(
-        self, epoch: int, train_metrics: dict, val_metrics: dict
-    ):
-        self.logger.info("Logging metrics to tensorboard")
-
-        self.logger.info("=== Epoch losses ===")
-        train_loss_keys = set(train_metrics["Losses"].keys())
-        val_loss_keys = set(val_metrics["Losses"].keys())
-        diff = train_loss_keys ^ val_loss_keys
-        assert not diff, f"Discrepancy between train and val losses: {diff}"
-
-        for metric in train_loss_keys:
-            t_metric = train_metrics["Losses"][metric]
-            v_metric = val_metrics["Losses"][metric]
-            self.logger.info(f"{metric}: Train={t_metric:.4f} | Val={v_metric:.4f}")
-
-            self.tensorboard_writer.add_scalars(
-                f"Losses/{metric}",
-                {"Train": t_metric, "Val": v_metric},
-                epoch,
-            )
-
-        self.logger.info("=== Epoch metrics ===")
-        train_metric_keys = set(train_metrics["Metrics"].keys())
-        val_metric_keys = set(val_metrics["Metrics"].keys())
-        diff = train_metric_keys ^ val_metric_keys
-        assert not diff, f"Discrepancy between train and val metrics: {diff}"
-
-        for metric in train_metric_keys:
-            t_metric = train_metrics["Metrics"][metric]
-            v_metric = val_metrics["Metrics"][metric]
-            self.logger.info(f"{metric}: Train={t_metric:.4f} | Val={v_metric:.4f}")
-
-            self.tensorboard_writer.add_scalars(
-                f"Metrics/{metric}",
-                {"Train": t_metric, "Val": v_metric},
-                epoch,
-            )
-
-        for optimizer, _ in self.optimizers_and_schedulers:
-            lr_group = {}
-            for i, param_group in enumerate(optimizer.param_groups):
-                lr_group[f"g{i}"] = param_group["lr"]
-
-            self.tensorboard_writer.add_scalars(
-                f"LR/{optimizer.__class__.__name__}",
-                lr_group,
-                epoch,
-            )
-
-        self.tensorboard_writer.flush()
-
     def _update_schedulers(
         self, step: bool = False, epoch: bool = False, val_loss: Optional[float] = None
     ):
@@ -201,42 +158,30 @@ class ModelTrainer:
         Args:
         - step: If True, update step-based schedulers (called per batch).
         - epoch: If True, update epoch-based schedulers (called per epoch).
-        - val_loss: (Optional) Validation loss for ReduceLROnPlateau.
+        - val_loss: Validation loss for ReduceLROnPlateau.
         """
-        for _, scheduler in self.optimizers_and_schedulers:
+        for scheduler in self.schedulers:
             if scheduler is None:
                 continue
 
-            if epoch and isinstance(
+            is_plateau = isinstance(
                 scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
-            ):
-                if val_loss is not None:
-                    scheduler.step(val_loss)
-                else:
-                    self.logger.warning(
-                        "Couldn't update ReduceLROnPlateau scheduler because val_loss is None."
-                    )
+            )
+            if epoch:  # update epoch based schedulers
+                if is_plateau:
+                    if val_loss is not None:
+                        scheduler.step(val_loss)
+                    else:
+                        self.logger.warning(
+                            "val_loss is None. Skipping ReduceLROnPlateau step."
+                        )
+                elif hasattr(scheduler, "step"):
+                    scheduler.step()
 
-            elif step and isinstance(
-                scheduler,
-                (
-                    torch.optim.lr_scheduler.OneCycleLR,
-                    torch.optim.lr_scheduler.LambdaLR,
-                    torch.optim.lr_scheduler.ExponentialLR,
-                    torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
-                ),
-            ):
-                scheduler.step()  # update step-based schedulers
-
-            elif epoch and isinstance(
-                scheduler,
-                (
-                    torch.optim.lr_scheduler.StepLR,
-                    torch.optim.lr_scheduler.MultiStepLR,
-                    torch.optim.lr_scheduler.CosineAnnealingLR,
-                ),
-            ):
-                scheduler.step()  # update epoch-based schedulers
+            if step and hasattr(scheduler, "step"):  # update step based schedulers
+                # Avoid stepping schedulers that should only step per epoch
+                if not is_plateau:
+                    scheduler.step()
 
     def _update_metrics(self, logits: Tensor, targets: Tensor):
         """Updates each evaluation metric"""
@@ -274,15 +219,14 @@ class ModelTrainer:
             weighted_losses[name] = weighted_loss
 
         # sum weighted individual losses to get the total loss for this batch
-        total_weighted_loss = sum(weighted_losses.values())
+        total_weighted_loss = sum(weighted_losses.values(), torch.tensor(0))
 
-        assert isinstance(total_weighted_loss, Tensor)
         return total_weighted_loss, weighted_losses
 
     def _accumulate_and_step(self, loss: Tensor, step: int, total_steps: int):
         # clear gradients
         if (step + 1) % self.grad_accum_steps == 0 or (step + 1) == total_steps:
-            for optimizer, _ in self.optimizers_and_schedulers:
+            for optimizer in self.optimizers:
                 optimizer.zero_grad()
 
         # perform backward pass
@@ -293,7 +237,7 @@ class ModelTrainer:
 
         # if reached grad_accum_steps, step schedulers & optimizer and update scaler
         if (step + 1) % self.grad_accum_steps == 0 or (step + 1) == total_steps:
-            for optimizer, _ in self.optimizers_and_schedulers:
+            for optimizer in self.optimizers:
                 if self.clip_norm:
                     if self.scaler:
                         self.scaler.unscale_(optimizer)
@@ -307,7 +251,7 @@ class ModelTrainer:
             if self.scaler:
                 self.scaler.update()
 
-    def _train_one_epoch(self, data_loader: DataLoader) -> dict:
+    def run_epoch(self, data_loader: DataLoader) -> dict:
         """
         Args:
         - data_loader: DataLoader for training data.
@@ -317,7 +261,7 @@ class ModelTrainer:
         self.model.train()
         running_total_weighted_loss = 0.0
         # initialize running sums for individual weighted losses for reporting
-        running_weighted_losses = {name: 0.0 for name in self.criterions.keys()}
+        running_weighted_losses = dict.fromkeys(self.criterions, 0.0)
 
         autocast_enabled = self.scaler is not None
 
@@ -382,11 +326,10 @@ class ModelTrainer:
         - test_loader: optional test set DataLoader.
         """
         # create logs dir and tensorboard self.loggers for current training run
-        self._open_writer()
+        logger_cls = NullLogger if not self.strategy.should_log() else TensorBoardLogger
+        experiment_logger = logger_cls(self.model_dir.joinpath("logs"))
 
-        # load last checkpoint (or start from scratch if 1)
-        start_epoch = self.checkpointer.load_checkpoint(self.device)
-
+        start_epoch = self.checkpointer.load_checkpoint(device=self.device)
         # log training info
         self.logger.info(
             f"Starting training from epoch: {start_epoch} for {max_epochs} max epochs."
@@ -398,7 +341,7 @@ class ModelTrainer:
         try:
             for epoch in range(start_epoch, max_epochs):
                 self.logger.info(f"Entering Epoch: {epoch}/{max_epochs}")
-                train_metrics = self._train_one_epoch(train_loader)
+                train_metrics = self.run_epoch(train_loader)
                 val_metrics = self.evaluate(val_loader)
 
                 if test_loader and epoch in self.test_epochs:
@@ -412,7 +355,7 @@ class ModelTrainer:
                         f"Current epoch {epoch} < {self.start_scheduling}, skipping scheduling"
                     )
 
-                self._log_tensorboard_metrics(epoch, train_metrics, val_metrics)
+                experiment_logger.log_metrics(epoch, train_metrics, val_metrics)
                 self.checkpointer.save_checkpoint(epoch, val_loss=val_loss)
 
         except KeyboardInterrupt:
@@ -420,8 +363,9 @@ class ModelTrainer:
             self.checkpointer.save_checkpoint(epoch)
 
         finally:
+            self.strategy.finalize()
+            experiment_logger.close_writer()
             self.logger.info("Finished training")
-            self._close_writer()
 
     def evaluate(
         self, data_loader: DataLoader, output_dir: Optional[Path] = None
@@ -505,20 +449,3 @@ class ModelTrainer:
         self.logger.info("=== Test metrics ===")
         for k, v in metrics["Metrics"].items():
             self.logger.info(f"{k}: {v:.4f}")
-
-    def _open_writer(self):
-        self.logger.info("Opening tensorboard writer")
-        self.logs_dir = self.model_dir.joinpath(
-            "logs", datetime.now().strftime("%d%m%Y-%H%M%S")
-        )
-
-        self.logs_dir.mkdir(parents=True, exist_ok=False)
-
-        self.tensorboard_writer = SummaryWriter(log_dir=self.logs_dir)
-
-    def _close_writer(self):
-        """
-        Close the Tensorboard writer.
-        """
-        self.logger.info("Closing tensorboard writer")
-        self.tensorboard_writer.close()

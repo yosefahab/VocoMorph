@@ -10,13 +10,12 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def create_model_instance(model_name: str, config: Dict[str, Any]) -> torch.nn.Module:
+def create_model_instance(model_dir: Path, config: Dict[str, Any]) -> torch.nn.Module:
     """Load and instantiate a model by name."""
+    model_name = model_dir.name
     try:
         # ensure the model file exists
-        model_path = Path(os.environ["PROJECT_ROOT"]).joinpath(
-            "models", model_name, "model.py"
-        )
+        model_path = Path(os.environ["PROJECT_ROOT"]).joinpath(model_dir, "model.py")
         if not model_path.exists():
             logger.critical(f"Model file not found: {model_path}")
             exit(1)

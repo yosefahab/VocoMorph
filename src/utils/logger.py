@@ -41,7 +41,8 @@ def setup_logging(
     - max_file_size: Max log file size in bytes before rotating (defaults to 5MB).
     - backup_count: Number of backup log files to keep.
     """
-    log_dir.mkdir(exist_ok=True)
+
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     log_format = "%(asctime)s | %(name)s | %(levelname)s | %(message)s"
 
