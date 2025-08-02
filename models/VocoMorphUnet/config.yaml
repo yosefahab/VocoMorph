@@ -31,10 +31,10 @@ config:
 
     datalists:
       train:
-        batch_size: 8
+        batch_size: 32
         path: "datalists/librispeech_train.csv"
       valid:
-        batch_size: 8
+        batch_size: 32
         path: "datalists/librispeech_valid.csv"
       test:
         batch_size: 1
@@ -142,5 +142,5 @@ config:
   checkpointer:
     save_interval: 5 # num epochs to save checkpoint
     save_best: true
-    keep_last_n: null # null or int
+    keep_last_n: 20 # null or int
     checkpoint_path: null # checkpoint to load or start from

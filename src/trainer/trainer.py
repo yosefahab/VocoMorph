@@ -77,7 +77,8 @@ class ModelTrainer:
         self.checkpoints_dir = self.model_dir.joinpath("checkpoints")
         self.checkpoints_dir.mkdir(exist_ok=True)
 
-        ckptr_cls = Checkpointer if not self.strategy.should_log() else NullCheckpointer
+        ckptr_cls = Checkpointer if self.strategy.should_log() else NullCheckpointer
+        self.logger.info(f"Using {ckptr_cls.__name__} checkpointer")
         self.checkpointer = ckptr_cls(
             self.checkpoints_dir,
             self.config["checkpointer"],
@@ -327,6 +328,7 @@ class ModelTrainer:
         """
         # create logs dir and tensorboard self.loggers for current training run
         logger_cls = NullLogger if not self.strategy.should_log() else TensorBoardLogger
+        self.logger.info(f"Using {logger_cls.__name__} experiment logger")
         experiment_logger = logger_cls(self.model_dir.joinpath("logs"))
 
         start_epoch = self.checkpointer.load_checkpoint(device=self.device)

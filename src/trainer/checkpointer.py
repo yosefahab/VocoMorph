@@ -171,7 +171,6 @@ class Checkpointer:
                 f"{self._OPTIMIZER_STATES} missing from checkpoint state dict"
             )
         else:
-            print(len(checkpoint[self._OPTIMIZER_STATES]), len(self.optimizers))
             for opt, state in zip(
                 self.optimizers, checkpoint[self._OPTIMIZER_STATES], strict=True
             ):

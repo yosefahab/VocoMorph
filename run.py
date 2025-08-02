@@ -31,11 +31,6 @@ def parse_args():
         help="Download a dataset. Default: timit.",
     )
     parser.add_argument(
-        "--run-tests",
-        action="store_true",
-        help="Run the test scripts (not the model).",
-    )
-    parser.add_argument(
         "--model-name",
         type=str,
         default="VocoMorphUnet",
@@ -105,12 +100,6 @@ if __name__ == "__main__":
         module = "src.dataset.generate_dataset"
         module = import_module(module)
         module.main(args.generate_dataset, config["data"])
-        exit(0)
-
-    # validate arguments
-    if args.run_tests:
-        module = import_module("tests.main")
-        module.main(config["data"])
         exit(0)
 
     if args.mode:
