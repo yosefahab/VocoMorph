@@ -27,18 +27,18 @@ config:
     # max audio length during training
     max_length: 80000 # 10 sec at 16k sr, -1 if you dont want to trim
 
-    dataset: "timit"
+    dataset: "librispeech"
 
     datalists:
       train:
         batch_size: 8
-        path: "data/datalists/timit_train.csv"
+        path: "datalists/librispeech_train.csv"
       valid:
         batch_size: 8
-        path: "data/datalists/timit_valid.csv"
+        path: "datalists/librispeech_valid.csv"
       test:
         batch_size: 1
-        path: "data/datalists/timit_test.csv"
+        path: "datalists/librispeech_test.csv"
 
     effects:
       [

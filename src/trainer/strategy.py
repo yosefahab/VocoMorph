@@ -36,7 +36,9 @@ class DDPStrategy(TrainingStrategy):
         self.logger.info(
             f"Using DDP strategy with {device_type} device type, and {backend} backend"
         )
-        if get_device(device_type).type == "mps":
+        self.device = get_device(self.device_type, self.local_rank)
+
+        if self.device.type == "mps":
             self.logger.error(
                 "DDP with MPS is not supported. Use CPU or SingleDeviceStrategy with mps."
             )
@@ -49,11 +51,8 @@ class DDPStrategy(TrainingStrategy):
         self.world_size = int(os.environ["WORLD_SIZE"])
 
     def wrap_model(self, model: torch.nn.Module):
-        device = get_device(self.device_type, self.local_rank)
-        model = model.to(device)
-        return torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[self.local_rank]
-        ), device
+        model = model.to(self.device)
+        return torch.nn.parallel.DistributedDataParallel(model, device_ids=[self.local_rank]), self.device
 
     def should_log(self) -> bool:
         return self.rank == 0

@@ -106,9 +106,9 @@ def get_dataloaders(
     # create dataset object for each split
     collate_fn_partial = partial(collate_fn, max_length=config["max_length"])
     dataloaders = {}
-    PROJECT_ROOT = Path(os.environ["PROJECT_ROOT"])
+    DATA_ROOT = Path(os.environ["DATA_ROOT"])
     for split in splits:
-        datalist_filepath = PROJECT_ROOT.joinpath(config["datalists"][split]["path"])
+        datalist_filepath = DATA_ROOT.joinpath(config["datalists"][split]["path"])
 
         assert datalist_filepath.exists(), (
             f"Datalist for split {split} doesn't exist: {datalist_filepath}"

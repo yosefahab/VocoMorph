@@ -4,7 +4,7 @@
 CUDA_VISIBLE_DEVICES="0"
 
 # set to 'true' to use torchrun, or 'false' for single-process training
-USE_DDP=true
+USE_DDP=false
 
 #! common arguments for run.py, edit this according to your experiment!
 EXP_ARGS="--mode train --model-name VocoMorphUnet --device gpu"
