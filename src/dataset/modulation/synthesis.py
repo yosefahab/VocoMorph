@@ -1,6 +1,7 @@
 """functions to synthesize audio"""
 
 import numpy as np
+from numpy.typing import NDArray
 from scipy import signal
 
 from .common import apply_distortion
@@ -8,7 +9,7 @@ from .common import apply_distortion
 
 def generate_carrier(
     shape, sr: int, wave_type: str = "square", freq: float = 100.0
-) -> np.ndarray:
+) -> NDArray:
     """
     generates a carrier wave for vocoding
     Args:
@@ -69,7 +70,7 @@ def generate_noise(
     noise_level: float = 0.02,
     noise_type: str = "white",
     dtype=np.float32,
-) -> np.ndarray:
+) -> NDArray:
     """
     Generates noise to add to an audio signal.
     Args:
@@ -77,7 +78,7 @@ def generate_noise(
     - noise_level: The intensity of the noise (scaled between 0 and 1).
     - noise_type: Type of noise ("white", "pink", "brown").
     Returns:
-        np.ndarray: Noise signal of the same shape as the input audio.
+        NDArray: Noise signal of the same shape as the input audio.
     """
     assert noise_type in ["white", "pink", "brown"]
 

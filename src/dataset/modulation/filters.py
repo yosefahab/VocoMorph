@@ -1,12 +1,12 @@
 """functions to alter audio frequency content"""
 
-import numpy as np
+from numpy.typing import NDArray
 from scipy.signal import butter, iirnotch, lfilter
 
 
 def apply_bandpass(
-    audio: np.ndarray, sr: int, low: float, high: float, order=2
-) -> np.ndarray:
+    audio: NDArray, sr: int, low: float, high: float, order=2
+) -> NDArray:
     """Applies a bandpass filter to an audio signal with shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
     audio = audio.astype(audio.dtype)
@@ -17,9 +17,7 @@ def apply_bandpass(
     return lfilter(b, a, audio, axis=1).astype(audio.dtype)
 
 
-def apply_lowpass(
-    audio: np.ndarray, sr: int, cutoff: float = 1000, order=5
-) -> np.ndarray:
+def apply_lowpass(audio: NDArray, sr: int, cutoff: float = 1000, order=5) -> NDArray:
     """Applies a low-pass filter to an audio signal of shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
     audio = audio.astype(audio.dtype)
@@ -29,9 +27,7 @@ def apply_lowpass(
     return lfilter(b, a, audio, axis=1).astype(audio.dtype)
 
 
-def apply_highpass(
-    audio: np.ndarray, sr: int, cutoff: float = 500, order=5
-) -> np.ndarray:
+def apply_highpass(audio: NDArray, sr: int, cutoff: float = 500, order=5) -> NDArray:
     """Applies a high-pass filter to an audio signal of shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
     audio = audio.astype(audio.dtype)
@@ -42,8 +38,8 @@ def apply_highpass(
 
 
 def apply_notch(
-    audio: np.ndarray, sr: int, notch_freq: float = 60, quality_factor=30
-) -> np.ndarray:
+    audio: NDArray, sr: int, notch_freq: float = 60, quality_factor=30
+) -> NDArray:
     """Applies a notch filter to remove a specific frequency from an audio signal of shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
     audio = audio.astype(audio.dtype)
@@ -54,8 +50,8 @@ def apply_notch(
 
 
 def apply_bandstop(
-    audio: np.ndarray, sr: int, lowcut: float = 300, highcut: float = 3000, order=5
-) -> np.ndarray:
+    audio: NDArray, sr: int, lowcut: float = 300, highcut: float = 3000, order=5
+) -> NDArray:
     """Applies a band-stop filter to remove a frequency range from an audio signal of shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
     audio = audio.astype(audio.dtype)

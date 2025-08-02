@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import librosa
 import numpy as np
 import soundfile as sf
+from numpy.typing import NDArray
+from scipy.signal.windows import hann
 
 from src.utils.logger import get_logger
 
@@ -12,7 +14,7 @@ logger = get_logger(__name__)
 
 
 def save_audio(
-    audio: np.ndarray,
+    audio: NDArray,
     sr: int,
     filename: str,
     output_dir: Optional[Path] = None,
@@ -64,7 +66,7 @@ def save_audio(
 
 def load_audio(
     filepath: Path, sr: Optional[int] = None, channels: int = 1
-) -> Tuple[np.ndarray, int]:
+) -> Tuple[NDArray, int]:
     """
     Loads an audio file with optional resampling and ensures (C, T) shape.
     Args:
@@ -92,3 +94,37 @@ def load_audio(
         audio = np.vstack([audio, audio])
 
     return audio, int(sr_out)
+
+
+def overlap_add(
+    audio: NDArray[np.float32],
+    chunk_size: int,
+    hop_size: int,
+    processor: Callable[[NDArray[np.float32]], NDArray[np.float32]],
+    window: Optional[NDArray[np.float32]] = None,
+) -> NDArray[np.float32]:
+    """
+    Apply a processor function to overlapping chunks of an audio signal using the overlap-add method.
+
+    Parameters:
+        audio: 1D float32 NumPy array of the input audio signal.
+        chunk_size: Number of samples in each frame.
+        hop_size: Number of samples to advance for each frame.
+        processor: Function applied to each chunk. Must return a chunk of the same shape.
+        window: Optional window function. If None, Hann window is used.
+
+    Returns:
+        Reconstructed audio signal as a 1D float32 NumPy array.
+    """
+    if window is None:
+        window = hann(chunk_size, sym=False).astype(np.float32)
+
+    output_len = len(audio) + chunk_size
+    output = np.zeros(output_len, dtype=np.float32)
+
+    for i in range(0, len(audio) - chunk_size + 1, hop_size):
+        chunk = audio[i : i + chunk_size] * window
+        processed = processor(chunk) * window
+        output[i : i + chunk_size] += processed
+
+    return output[: len(audio)]

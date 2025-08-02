@@ -23,9 +23,10 @@ config:
     hop_length: &var_hop_length 256
 
     # the chunk of audio the model processes at a time
-    frame_length: &var_frame_length 33536 # 4096 # 256 ms at 16k
+    chunk_size: &var_chunk_size 4096 # 256 ms at 16k
     # max audio length during training
     max_length: 160000 # 10 sec at 16k sr, -1 if you dont want to trim
+    overlap: 0
 
     datalists:
       train:
@@ -49,7 +50,7 @@ config:
   # ------------------------------------------------------------ #
   model:
     num_channels: *var_num_channels
-    chunk_size: *var_frame_length
+    chunk_size: *var_chunk_size
     overlap: 0
     embedding_dim: 32
     num_effects: 5
@@ -63,7 +64,7 @@ config:
       n_fft: *var_n_fft
       hop_length: *var_hop_length
       win_length: *var_win_length
-      output_length: *var_frame_length
+      output_length: *var_chunk_size
   # ------------------------------------------------------------ #
   # loss functions
   criterions:

@@ -1,8 +1,8 @@
 import os
-from functools import partial
 from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Dict, List, Tuple
+from collections import OrderedDict
 
 import pandas as pd
 import torch
@@ -10,7 +10,6 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset
 from torch.utils.data.distributed import DistributedSampler
 
-from src.utils.audio import load_audio
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,9 +22,11 @@ class VocoMorphDataset(Dataset):
         self.logger = get_logger(self.__class__.__name__)
         self.fs = config["sample_rate"]
         self.channels = config["channels"]
-        self.frame_length = config["frame_length"]
-        self.max_length = config["max_length"]
+        self.chunk_size = config["chunk_size"]
         self.datalist_filepath = datalist_filepath
+
+        self.lru_tensor_cache = OrderedDict()
+        self.cache_size = config.get("cache_size", 100)
 
         self.df = pd.read_csv(datalist_filepath)
 
@@ -35,6 +36,16 @@ class VocoMorphDataset(Dataset):
     def __len__(self) -> int:
         return self.n
 
+    def _load_tensor(self, filepath: str):
+        """Loads a tensor file into the cache."""
+        if filepath not in self.lru_tensor_cache:
+            if len(self.lru_tensor_cache) >= self.cache_size:
+                self.lru_tensor_cache.popitem(last=False)
+            self.lru_tensor_cache[filepath] = torch.load(filepath)
+
+        self.lru_tensor_cache.move_to_end(filepath)
+        return self.lru_tensor_cache[filepath]
+
     def __getitem__(
         self, index
     ) -> Tuple[Tuple[int, torch.Tensor, torch.Tensor], torch.Tensor]:
@@ -42,52 +53,45 @@ class VocoMorphDataset(Dataset):
         Returns:
         - wave ID
         - effect ID tensor
-        - raw wave (C, frame_length)
-        - modulated wave (C, frame_length)
+        - raw wave chunk (C, chunk_size)
+        - modulated wave chunk (C, chunk_size)
         """
         row = self.df.iloc[index]
         id: int = row["ID"]
         effect_id = row["effect_id"]
-        raw_path = row["raw_wav_path"]
-        modulated_path = row["modulated_wav_path"]
+        tensor_filepath = row["tensor_filepath"]
+        chunk_index = row["chunk_index"]
 
-        raw_wave, _ = load_audio(raw_path, self.fs, self.channels)[: self.max_length]
-        modulated_wave, _ = load_audio(modulated_path, self.fs, self.channels)[
-            : self.max_length
-        ]
+        # get the large tensor, loading it from disk if not in cache
+        large_tensor = self._load_tensor(tensor_filepath)
+        raw_chunks_tensor = large_tensor["raw"]
+        modulated_chunks_tensor = large_tensor["modulated"]
 
-        # shape: (C, frame_length)
-        raw_wave = torch.tensor(raw_wave)
-        modulated_wave = torch.tensor(modulated_wave)
-        effect_id = torch.tensor(effect_id, dtype=torch.long).unsqueeze(0)
+        # slice the large tensor to get the specific chunk
+        raw_chunk = raw_chunks_tensor[chunk_index]
+        modulated_chunk = modulated_chunks_tensor[chunk_index]
 
-        return ((id, effect_id, raw_wave), modulated_wave)
+        assert raw_chunk.shape[1] == self.chunk_size
+        assert modulated_chunk.shape[1] == self.chunk_size
+
+        effect_id = torch.tensor(effect_id, dtype=torch.long)
+
+        return ((id, effect_id, raw_chunk), modulated_chunk)
 
 
-def collate_fn(batch, max_length):
+def collate_fn(batch):
+    """
+    Collates a batch of pre-chunked tensors.
+    """
     first_elems, modulated_waves = zip(*batch)
     ids, effect_ids, raw_waves = zip(*first_elems)
 
-    # shape: (B, 1)
+    # shape: (B)
     effect_ids = torch.stack(effect_ids)
 
-    def pad_wave(wave, max_length):
-        """pad all waveforms to the max_length"""
-        if max_length is None:
-            return wave
-
-        C, T = wave.shape
-        pad_amount = max_length - T
-        wave = (
-            torch.cat([wave, torch.zeros(C, pad_amount)], dim=1)
-            if pad_amount > 0
-            else wave
-        )
-        return wave[:, :max_length]
-
-    # (B, C, T)
-    raw_waves = torch.stack([pad_wave(w, max_length) for w in raw_waves])
-    modulated_waves = torch.stack([pad_wave(w, max_length) for w in modulated_waves])
+    # the tensors are already the correct size, just stack them
+    raw_waves = torch.stack(raw_waves)
+    modulated_waves = torch.stack(modulated_waves)
 
     return (ids, effect_ids, raw_waves, modulated_waves)
 
@@ -103,12 +107,13 @@ def get_dataloaders(
     Returns:
         dict containing dataloader for each split
     """
-    # create dataset object for each split
-    collate_fn_partial = partial(collate_fn, max_length=config["max_length"])
     dataloaders = {}
     DATA_ROOT = Path(os.environ["DATA_ROOT"])
+    dataset_name = config["dataset_name"]
     for split in splits:
-        datalist_filepath = DATA_ROOT.joinpath(config["datalists"][split]["path"])
+        datalist_filepath = DATA_ROOT.joinpath(
+            dataset_name, "datalists", config["datalists"][split]["path"]
+        )
 
         assert datalist_filepath.exists(), (
             f"Datalist for split {split} doesn't exist: {datalist_filepath}"
@@ -137,7 +142,7 @@ def get_dataloaders(
             pin_memory=config["pin_memory"],
             num_workers=num_workers,
             drop_last=drop_last,
-            collate_fn=collate_fn_partial,
+            collate_fn=collate_fn,
             sampler=sampler,
         )
         dataloaders[split] = dataloader

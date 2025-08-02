@@ -1,9 +1,9 @@
 import importlib
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 import librosa
 import matplotlib.pyplot as plt
-import numpy as np
+from numpy.typing import NDArray
 from torch import Tensor
 
 from src.utils.logger import get_logger
@@ -26,7 +26,7 @@ def plot_tensors(tensors: List[Tensor]):
     plt.show()
 
 
-def plot_waves(signals: List[Tuple[np.ndarray, float]]):
+def plot_waves(signals: List[Tuple[NDArray, float]]):
     n = len(signals)
     _, ax = plt.subplots(nrows=n)
     for i, signal in enumerate(signals):
@@ -36,9 +36,7 @@ def plot_waves(signals: List[Tuple[np.ndarray, float]]):
     plt.show()
 
 
-def plot_wave_and_augmented_wave(
-    signal: np.ndarray, augmented_signal: np.ndarray, sr: int
-):
+def plot_wave_and_augmented_wave(signal: NDArray, augmented_signal: NDArray, sr: int):
     _, ax = plt.subplots(nrows=2)
     librosa.display.waveshow(signal, sr=sr, ax=ax[0])
     ax[0].set(title="Original signal")
@@ -47,33 +45,38 @@ def plot_wave_and_augmented_wave(
     plt.show()
 
 
-def call_functions_by_name(function_names: List[str], *args, **kwargs) -> list:
+def get_functions_by_name(function_names: List[str]) -> List[Callable]:
     """
-    Dynamically loads and calls functions from the specified module.
+    Dynamically loads and caches function objects from the 'effects' module.
+
+    This function is intended to be called once to pre-load all effect functions.
+
     Args:
-    - function_names: List of function names to call.
-    - args: Positional arguments to pass to each function.
-    - kwargs: Keyword arguments to pass to each function.
+    - function_names: List of function names (strings) to load.
+
     Returns:
-        functions' results
+        A list of callable function objects.
     """
-    results = []
+    # A cache to store function objects after the first lookup.
+    # This cache is local to this function and will not be a global variable.
+    functions: dict[str, Callable] = {}
+
+    # Load the module once
     module = importlib.import_module("src.dataset.modulation.effects")
 
-    for name in function_names:
+    def get_function_by_name(name):
         if not hasattr(module, name):
-            logger.critical(f"Effect {name} not implemented in {module}! Terminating")
+            logger.critical(f"Effect '{name}' not implemented in {module}! Terminating")
             exit(1)
 
         func = getattr(module, name)
         if not callable(func):
-            logger.critical(f"{func} is not a callable function")
+            logger.critical(f"'{func}' is not a callable function! Terminating")
+            exit(1)
+        return func
 
-        try:
-            results.append(func(*args, **kwargs))
-        except Exception as e:
-            logger.error(
-                f"An exception occured while calling {func} with args: {args} and kwargs: {kwargs}: {e}"
-            )
+    for name in function_names:
+        if name not in functions:
+            functions[name] = get_function_by_name(name)
 
-    return results
+    return list(functions.values())

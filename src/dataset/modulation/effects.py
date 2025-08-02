@@ -1,6 +1,7 @@
 """functions to alter audio perception"""
 
 import numpy as np
+from numpy.typing import NDArray
 
 from .common import apply_distortion
 from .filters import apply_bandpass, apply_lowpass
@@ -13,7 +14,7 @@ from .transformations import (
 )
 
 
-def apply_bit_crush(audio: np.ndarray, bit_depth: int = 8) -> np.ndarray:
+def apply_bit_crush(audio: NDArray, bit_depth: int = 8) -> NDArray:
     """
     Compresses/reduces fidelity of audio
     """
@@ -22,14 +23,14 @@ def apply_bit_crush(audio: np.ndarray, bit_depth: int = 8) -> np.ndarray:
 
 
 def apply_chorus(
-    audio: np.ndarray,
+    audio: NDArray,
     sr: int,
     rate: float = 4.0,
     depth: float = 0.003,
     delay: float = 0.03,
     voices: int = 3,
     mix: float = 0.5,
-) -> np.ndarray:
+) -> NDArray:
     """
     applies a chorus effect to each channel independently
     """
@@ -55,7 +56,7 @@ def apply_chorus(
     return (1 - mix) * audio + mix * chorus_signal
 
 
-def apply_reverb(audio: np.ndarray, sr: int, delay=70, decay=0.3) -> np.ndarray:
+def apply_reverb(audio: NDArray, sr: int, delay=70, decay=0.3) -> NDArray:
     """
     apply reverb effect to the audio by applying a simple convolution reverb filter
     """
@@ -74,12 +75,12 @@ def apply_reverb(audio: np.ndarray, sr: int, delay=70, decay=0.3) -> np.ndarray:
 
 
 def apply_echo(
-    audio: np.ndarray,
+    audio: NDArray,
     sr: int,
     delay: int = 500,
     decay: float = 0.15,
     num_echoes: int = 3,
-) -> np.ndarray:
+) -> NDArray:
     """
     Apply an echo effect with progressively fading echoes.
     Args:
@@ -107,8 +108,8 @@ def apply_echo(
 
 
 def apply_tremolo(
-    audio: np.ndarray, sr: int, rate: float = 30, depth: float = 0.4
-) -> np.ndarray:
+    audio: NDArray, sr: int, rate: float = 30, depth: float = 0.4
+) -> NDArray:
     """
     applies a tremolo (amplitude modulation) effect to the audio signal
     """
@@ -119,13 +120,13 @@ def apply_tremolo(
 
 
 def apply_vocoder(
-    audio: np.ndarray,
-    carrier: np.ndarray,
+    audio: NDArray,
+    carrier: NDArray,
     sr: int,
     num_bands: int = 8,
     min_freq: float = 100,
     max_freq: float = 4000,
-) -> np.ndarray:
+) -> NDArray:
     """
     Applies a basic vocoder effect by modulating a carrier wave with the input audio's frequency envelopes.
     """
@@ -146,9 +147,7 @@ def apply_vocoder(
     return output
 
 
-def apply_sidechain(
-    audio: np.ndarray, kick: np.ndarray, reduction: float = 0.5
-) -> np.ndarray:
+def apply_sidechain(audio: NDArray, kick: NDArray, reduction: float = 0.5) -> NDArray:
     """
     Applies sidechain compression based on kick drum
     """
@@ -158,12 +157,12 @@ def apply_sidechain(
 
 
 def apply_modulation(
-    audio: np.ndarray,
+    audio: NDArray,
     sr: int,
     mod_freq: float = 19.0,
     mod_depth: float = 0.2,
     mod_type: str = "am",
-) -> np.ndarray:
+) -> NDArray:
     """
     applies amplitude or ring modulation to an audio signal
     """
@@ -181,8 +180,8 @@ def apply_modulation(
 
 
 def apply_direction_effect(
-    audio: np.ndarray, direction: str = "center", speed: float = 5.0
-) -> np.ndarray:
+    audio: NDArray, direction: str = "center", speed: float = 5.0
+) -> NDArray:
     """
     applies directional effects to a stereo audio signal
     """
@@ -206,7 +205,7 @@ def apply_direction_effect(
     return np.vstack((left, right))
 
 
-def apply_radio_effect(audio: np.ndarray, sr: int) -> np.ndarray:
+def apply_radio_effect(audio: NDArray, sr: int) -> NDArray:
     # imitate AM radio frequency response
     mod_audio = apply_bandpass(audio, sr, low=400.0, high=2500.0)
 
@@ -230,7 +229,7 @@ def apply_radio_effect(audio: np.ndarray, sr: int) -> np.ndarray:
     return audio
 
 
-def apply_scifi_effect(audio: np.ndarray, sr: int) -> np.ndarray:
+def apply_scifi_effect(audio: NDArray, sr: int) -> NDArray:
     audio = apply_pitch_shift(audio, sr, -1)
     audio = apply_modulation(audio, sr, mod_freq=80, mod_type="am")
     audio = apply_bit_crush(audio, bit_depth=16)
@@ -240,13 +239,13 @@ def apply_scifi_effect(audio: np.ndarray, sr: int) -> np.ndarray:
     return audio
 
 
-def apply_robotic_effect(audio: np.ndarray, sr: int) -> np.ndarray:
+def apply_robotic_effect(audio: NDArray, sr: int) -> NDArray:
     carrier = generate_carrier(audio.shape, sr, wave_type="square", freq=150)
     audio = apply_vocoder(audio, carrier, sr, num_bands=32, max_freq=4000)
     return audio
 
 
-def apply_autotuner_effect(audio: np.ndarray, sr: int) -> np.ndarray:
+def apply_autotuner_effect(audio: NDArray, sr: int) -> NDArray:
     carrier = generate_carrier(audio.shape, sr, wave_type="sawtooth", freq=300)
     audio = apply_vocoder(audio, carrier, sr, num_bands=50, max_freq=5000)
     audio = apply_compression(audio, threshold=-15, ratio=3.0)
@@ -256,7 +255,7 @@ def apply_autotuner_effect(audio: np.ndarray, sr: int) -> np.ndarray:
     return audio
 
 
-def apply_ghost_effect(audio: np.ndarray, sr: int) -> np.ndarray:
+def apply_ghost_effect(audio: NDArray, sr: int) -> NDArray:
     audio = apply_pitch_shift(audio, sr, 3)
 
     carrier = generate_noise(
@@ -271,7 +270,7 @@ def apply_ghost_effect(audio: np.ndarray, sr: int) -> np.ndarray:
     return mod_audio
 
 
-def apply_monster_effect(audio: np.ndarray, sr: int) -> np.ndarray:
+def apply_monster_effect(audio: NDArray, sr: int) -> NDArray:
     low_pitch = apply_pitch_shift(audio, sr, -12)
     mid_pitch = apply_pitch_shift(audio, sr, -6)
     high_pitch = apply_pitch_shift(audio, sr, -3)

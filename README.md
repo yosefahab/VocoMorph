@@ -58,7 +58,7 @@ criterion:
 ```
 
 The same goes for effects that are used for augment the data.
-First implement the function in $PROJECT_ROOT/src/modulation/effects.py with signature: `def apply_my_effect(audio: np.ndarray, sr: int) -> np.ndarray:`
+First implement the function in $PROJECT_ROOT/src/modulation/effects.py with signature: `def apply_my_effect(audio: NDArray, sr: int) -> NDArray:`
 Then add it to the list in:
 
 ```yaml

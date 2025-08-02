@@ -2,13 +2,14 @@
 
 import librosa
 import numpy as np
+from numpy.typing import NDArray
 
 
-def identity_transform(audio: np.ndarray, sr: int) -> np.ndarray:
+def identity_transform(audio: NDArray, sr: int) -> NDArray:
     return audio
 
 
-def normalize_audio(original_audio: np.ndarray, new_audio: np.ndarray) -> np.ndarray:
+def normalize_audio(original_audio: NDArray, new_audio: NDArray) -> NDArray:
     """
     Normalizes an audio array of samples to match the RMS (loudness) of the original.
     Ensures output does not exceed [-1, 1] to prevent clipping.
@@ -23,7 +24,7 @@ def normalize_audio(original_audio: np.ndarray, new_audio: np.ndarray) -> np.nda
     return np.clip(normalized_audio, -1, 1)
 
 
-def convert_to_mono(audio: np.ndarray) -> np.ndarray:
+def convert_to_mono(audio: NDArray) -> NDArray:
     """
     Converts multi-channel audio to mono by averaging across channels.
     """
@@ -32,7 +33,7 @@ def convert_to_mono(audio: np.ndarray) -> np.ndarray:
     return audio
 
 
-def apply_time_stretch(audio: np.ndarray, _sr: int, rate: float = 0.7) -> np.ndarray:
+def apply_time_stretch(audio: NDArray, _sr: int, rate: float = 0.7) -> NDArray:
     """
     Stretches or compresses the audio in time without altering pitch.
     """
@@ -46,7 +47,7 @@ def apply_time_stretch(audio: np.ndarray, _sr: int, rate: float = 0.7) -> np.nda
     )
 
 
-def apply_pitch_shift(audio: np.ndarray, sr: int, n_steps: float = 6) -> np.ndarray:
+def apply_pitch_shift(audio: NDArray, sr: int, n_steps: float = 6) -> NDArray:
     """
     Shifts pitch by a number of steps (positive or negative).
     """
@@ -61,8 +62,8 @@ def apply_pitch_shift(audio: np.ndarray, sr: int, n_steps: float = 6) -> np.ndar
 
 
 def apply_compression(
-    audio: np.ndarray, threshold: float = -20, ratio: float = 4.0
-) -> np.ndarray:
+    audio: NDArray, threshold: float = -20, ratio: float = 4.0
+) -> NDArray:
     """
     Applies dynamic range compression to an audio signal.
     """
