@@ -33,13 +33,13 @@ config:
     datalists:
       train:
         batch_size: 32
-        path: "datalists/librispeech_train.csv"
+        path: "librispeech_train_augmented.csv"
       valid:
         batch_size: 32
-        path: "datalists/librispeech_valid.csv"
+        path: "librispeech_valid_augmented.csv"
       test:
         batch_size: 1
-        path: "datalists/librispeech_test.csv"
+        path: "librispeech_test_augmented.csv"
 
     effects:
       [
@@ -137,7 +137,7 @@ config:
     dummy_input:
       - shape: [1]
         dtype: long
-      - shape: [1, 1, *var_sample_rate]
+      - shape: [1, 1, *var_chunk_size]
         dtype: float32
 
   checkpointer:

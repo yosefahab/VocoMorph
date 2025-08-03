@@ -1,10 +1,10 @@
 ==========================================================================================
 Layer (type:depth-idx)                   Output Shape              Param #
 ==========================================================================================
-VocoMorphUnet                            [1, 1, 16000]             --
+VocoMorphUnet                            [1, 1, 4096]              --
 ├─EffectEncoder: 1-1                     [1, 32]                   --
 │    └─Embedding: 2-1                    [1, 1, 32]                160
-├─ModuleList: 1-14                       --                        (recursive)
+├─ModuleList: 1-2                        --                        --
 │    └─Encoder: 2-2                      [1, 32, 2048]             --
 │    │    └─ConvBlock: 3-1               [1, 32, 4096]             192
 │    │    └─FiLM: 3-2                    [1, 32, 4096]             2,112
@@ -25,7 +25,7 @@ VocoMorphUnet                            [1, 1, 16000]             --
 │    │    └─ConvBlock: 3-13              [1, 512, 256]             394,752
 │    │    └─FiLM: 3-14                   [1, 512, 256]             33,792
 │    │    └─MaxPool1d: 3-15              [1, 512, 128]             --
-├─ModuleList: 1-15                       --                        (recursive)
+├─ModuleList: 1-3                        --                        --
 │    └─Encoder: 2-7                      [1, 1024, 128]            --
 │    │    └─ConvBlock: 3-16              [1, 1024, 128]            1,575,936
 │    │    └─FiLM: 3-17                   [1, 1024, 128]            67,584
@@ -34,7 +34,7 @@ VocoMorphUnet                            [1, 1, 16000]             --
 │    │    └─ConvBlock: 3-19              [1, 1024, 128]            3,148,800
 │    │    └─FiLM: 3-20                   [1, 1024, 128]            67,584
 │    │    └─Identity: 3-21               [1, 1024, 128]            --
-├─ModuleList: 1-16                       --                        (recursive)
+├─ModuleList: 1-4                        --                        --
 │    └─Decoder: 2-9                      [1, 512, 256]             --
 │    │    └─DeconvBlock: 3-22            [1, 512, 256]             3,148,800
 │    │    └─FiLM: 3-23                   [1, 512, 256]             33,792
@@ -51,155 +51,14 @@ VocoMorphUnet                            [1, 1, 16000]             --
 │    │    └─DeconvBlock: 3-30            [1, 32, 4096]             12,480
 │    │    └─FiLM: 3-31                   [1, 32, 4096]             2,112
 ├─Conv1d: 1-5                            [1, 1, 4096]              33
-├─ModuleList: 1-14                       --                        (recursive)
-│    └─Encoder: 2-14                     [1, 32, 2048]             (recursive)
-│    │    └─ConvBlock: 3-32              [1, 32, 4096]             (recursive)
-│    │    └─FiLM: 3-33                   [1, 32, 4096]             (recursive)
-│    │    └─MaxPool1d: 3-34              [1, 32, 2048]             --
-│    └─Encoder: 2-15                     [1, 64, 1024]             (recursive)
-│    │    └─ConvBlock: 3-35              [1, 64, 2048]             (recursive)
-│    │    └─FiLM: 3-36                   [1, 64, 2048]             (recursive)
-│    │    └─MaxPool1d: 3-37              [1, 64, 1024]             --
-│    └─Encoder: 2-16                     [1, 128, 512]             (recursive)
-│    │    └─ConvBlock: 3-38              [1, 128, 1024]            (recursive)
-│    │    └─FiLM: 3-39                   [1, 128, 1024]            (recursive)
-│    │    └─MaxPool1d: 3-40              [1, 128, 512]             --
-│    └─Encoder: 2-17                     [1, 256, 256]             (recursive)
-│    │    └─ConvBlock: 3-41              [1, 256, 512]             (recursive)
-│    │    └─FiLM: 3-42                   [1, 256, 512]             (recursive)
-│    │    └─MaxPool1d: 3-43              [1, 256, 256]             --
-│    └─Encoder: 2-18                     [1, 512, 128]             (recursive)
-│    │    └─ConvBlock: 3-44              [1, 512, 256]             (recursive)
-│    │    └─FiLM: 3-45                   [1, 512, 256]             (recursive)
-│    │    └─MaxPool1d: 3-46              [1, 512, 128]             --
-├─ModuleList: 1-15                       --                        (recursive)
-│    └─Encoder: 2-19                     [1, 1024, 128]            (recursive)
-│    │    └─ConvBlock: 3-47              [1, 1024, 128]            (recursive)
-│    │    └─FiLM: 3-48                   [1, 1024, 128]            (recursive)
-│    │    └─Identity: 3-49               [1, 1024, 128]            --
-│    └─Encoder: 2-20                     [1, 1024, 128]            (recursive)
-│    │    └─ConvBlock: 3-50              [1, 1024, 128]            (recursive)
-│    │    └─FiLM: 3-51                   [1, 1024, 128]            (recursive)
-│    │    └─Identity: 3-52               [1, 1024, 128]            --
-├─ModuleList: 1-16                       --                        (recursive)
-│    └─Decoder: 2-21                     [1, 512, 256]             (recursive)
-│    │    └─DeconvBlock: 3-53            [1, 512, 256]             (recursive)
-│    │    └─FiLM: 3-54                   [1, 512, 256]             (recursive)
-│    └─Decoder: 2-22                     [1, 256, 512]             (recursive)
-│    │    └─DeconvBlock: 3-55            [1, 256, 512]             (recursive)
-│    │    └─FiLM: 3-56                   [1, 256, 512]             (recursive)
-│    └─Decoder: 2-23                     [1, 128, 1024]            (recursive)
-│    │    └─DeconvBlock: 3-57            [1, 128, 1024]            (recursive)
-│    │    └─FiLM: 3-58                   [1, 128, 1024]            (recursive)
-│    └─Decoder: 2-24                     [1, 64, 2048]             (recursive)
-│    │    └─DeconvBlock: 3-59            [1, 64, 2048]             (recursive)
-│    │    └─FiLM: 3-60                   [1, 64, 2048]             (recursive)
-│    └─Decoder: 2-25                     [1, 32, 4096]             (recursive)
-│    │    └─DeconvBlock: 3-61            [1, 32, 4096]             (recursive)
-│    │    └─FiLM: 3-62                   [1, 32, 4096]             (recursive)
-├─Conv1d: 1-9                            [1, 1, 4096]              (recursive)
-├─ModuleList: 1-14                       --                        (recursive)
-│    └─Encoder: 2-26                     [1, 32, 2048]             (recursive)
-│    │    └─ConvBlock: 3-63              [1, 32, 4096]             (recursive)
-│    │    └─FiLM: 3-64                   [1, 32, 4096]             (recursive)
-│    │    └─MaxPool1d: 3-65              [1, 32, 2048]             --
-│    └─Encoder: 2-27                     [1, 64, 1024]             (recursive)
-│    │    └─ConvBlock: 3-66              [1, 64, 2048]             (recursive)
-│    │    └─FiLM: 3-67                   [1, 64, 2048]             (recursive)
-│    │    └─MaxPool1d: 3-68              [1, 64, 1024]             --
-│    └─Encoder: 2-28                     [1, 128, 512]             (recursive)
-│    │    └─ConvBlock: 3-69              [1, 128, 1024]            (recursive)
-│    │    └─FiLM: 3-70                   [1, 128, 1024]            (recursive)
-│    │    └─MaxPool1d: 3-71              [1, 128, 512]             --
-│    └─Encoder: 2-29                     [1, 256, 256]             (recursive)
-│    │    └─ConvBlock: 3-72              [1, 256, 512]             (recursive)
-│    │    └─FiLM: 3-73                   [1, 256, 512]             (recursive)
-│    │    └─MaxPool1d: 3-74              [1, 256, 256]             --
-│    └─Encoder: 2-30                     [1, 512, 128]             (recursive)
-│    │    └─ConvBlock: 3-75              [1, 512, 256]             (recursive)
-│    │    └─FiLM: 3-76                   [1, 512, 256]             (recursive)
-│    │    └─MaxPool1d: 3-77              [1, 512, 128]             --
-├─ModuleList: 1-15                       --                        (recursive)
-│    └─Encoder: 2-31                     [1, 1024, 128]            (recursive)
-│    │    └─ConvBlock: 3-78              [1, 1024, 128]            (recursive)
-│    │    └─FiLM: 3-79                   [1, 1024, 128]            (recursive)
-│    │    └─Identity: 3-80               [1, 1024, 128]            --
-│    └─Encoder: 2-32                     [1, 1024, 128]            (recursive)
-│    │    └─ConvBlock: 3-81              [1, 1024, 128]            (recursive)
-│    │    └─FiLM: 3-82                   [1, 1024, 128]            (recursive)
-│    │    └─Identity: 3-83               [1, 1024, 128]            --
-├─ModuleList: 1-16                       --                        (recursive)
-│    └─Decoder: 2-33                     [1, 512, 256]             (recursive)
-│    │    └─DeconvBlock: 3-84            [1, 512, 256]             (recursive)
-│    │    └─FiLM: 3-85                   [1, 512, 256]             (recursive)
-│    └─Decoder: 2-34                     [1, 256, 512]             (recursive)
-│    │    └─DeconvBlock: 3-86            [1, 256, 512]             (recursive)
-│    │    └─FiLM: 3-87                   [1, 256, 512]             (recursive)
-│    └─Decoder: 2-35                     [1, 128, 1024]            (recursive)
-│    │    └─DeconvBlock: 3-88            [1, 128, 1024]            (recursive)
-│    │    └─FiLM: 3-89                   [1, 128, 1024]            (recursive)
-│    └─Decoder: 2-36                     [1, 64, 2048]             (recursive)
-│    │    └─DeconvBlock: 3-90            [1, 64, 2048]             (recursive)
-│    │    └─FiLM: 3-91                   [1, 64, 2048]             (recursive)
-│    └─Decoder: 2-37                     [1, 32, 4096]             (recursive)
-│    │    └─DeconvBlock: 3-92            [1, 32, 4096]             (recursive)
-│    │    └─FiLM: 3-93                   [1, 32, 4096]             (recursive)
-├─Conv1d: 1-13                           [1, 1, 4096]              (recursive)
-├─ModuleList: 1-14                       --                        (recursive)
-│    └─Encoder: 2-38                     [1, 32, 2048]             (recursive)
-│    │    └─ConvBlock: 3-94              [1, 32, 4096]             (recursive)
-│    │    └─FiLM: 3-95                   [1, 32, 4096]             (recursive)
-│    │    └─MaxPool1d: 3-96              [1, 32, 2048]             --
-│    └─Encoder: 2-39                     [1, 64, 1024]             (recursive)
-│    │    └─ConvBlock: 3-97              [1, 64, 2048]             (recursive)
-│    │    └─FiLM: 3-98                   [1, 64, 2048]             (recursive)
-│    │    └─MaxPool1d: 3-99              [1, 64, 1024]             --
-│    └─Encoder: 2-40                     [1, 128, 512]             (recursive)
-│    │    └─ConvBlock: 3-100             [1, 128, 1024]            (recursive)
-│    │    └─FiLM: 3-101                  [1, 128, 1024]            (recursive)
-│    │    └─MaxPool1d: 3-102             [1, 128, 512]             --
-│    └─Encoder: 2-41                     [1, 256, 256]             (recursive)
-│    │    └─ConvBlock: 3-103             [1, 256, 512]             (recursive)
-│    │    └─FiLM: 3-104                  [1, 256, 512]             (recursive)
-│    │    └─MaxPool1d: 3-105             [1, 256, 256]             --
-│    └─Encoder: 2-42                     [1, 512, 128]             (recursive)
-│    │    └─ConvBlock: 3-106             [1, 512, 256]             (recursive)
-│    │    └─FiLM: 3-107                  [1, 512, 256]             (recursive)
-│    │    └─MaxPool1d: 3-108             [1, 512, 128]             --
-├─ModuleList: 1-15                       --                        (recursive)
-│    └─Encoder: 2-43                     [1, 1024, 128]            (recursive)
-│    │    └─ConvBlock: 3-109             [1, 1024, 128]            (recursive)
-│    │    └─FiLM: 3-110                  [1, 1024, 128]            (recursive)
-│    │    └─Identity: 3-111              [1, 1024, 128]            --
-│    └─Encoder: 2-44                     [1, 1024, 128]            (recursive)
-│    │    └─ConvBlock: 3-112             [1, 1024, 128]            (recursive)
-│    │    └─FiLM: 3-113                  [1, 1024, 128]            (recursive)
-│    │    └─Identity: 3-114              [1, 1024, 128]            --
-├─ModuleList: 1-16                       --                        (recursive)
-│    └─Decoder: 2-45                     [1, 512, 256]             (recursive)
-│    │    └─DeconvBlock: 3-115           [1, 512, 256]             (recursive)
-│    │    └─FiLM: 3-116                  [1, 512, 256]             (recursive)
-│    └─Decoder: 2-46                     [1, 256, 512]             (recursive)
-│    │    └─DeconvBlock: 3-117           [1, 256, 512]             (recursive)
-│    │    └─FiLM: 3-118                  [1, 256, 512]             (recursive)
-│    └─Decoder: 2-47                     [1, 128, 1024]            (recursive)
-│    │    └─DeconvBlock: 3-119           [1, 128, 1024]            (recursive)
-│    │    └─FiLM: 3-120                  [1, 128, 1024]            (recursive)
-│    └─Decoder: 2-48                     [1, 64, 2048]             (recursive)
-│    │    └─DeconvBlock: 3-121           [1, 64, 2048]             (recursive)
-│    │    └─FiLM: 3-122                  [1, 64, 2048]             (recursive)
-│    └─Decoder: 2-49                     [1, 32, 4096]             (recursive)
-│    │    └─DeconvBlock: 3-123           [1, 32, 4096]             (recursive)
-│    │    └─FiLM: 3-124                  [1, 32, 4096]             (recursive)
-├─Conv1d: 1-17                           [1, 1, 4096]              (recursive)
 ==========================================================================================
 Total params: 9,712,513
 Trainable params: 9,712,513
 Non-trainable params: 0
-Total mult-adds (Units.GIGABYTES): 9.42
+Total mult-adds (Units.GIGABYTES): 2.36
 ==========================================================================================
-Input size (MB): 0.06
-Forward/backward pass size (MB): 143.00
+Input size (MB): 0.02
+Forward/backward pass size (MB): 35.75
 Params size (MB): 38.85
-Estimated Total Size (MB): 181.91
+Estimated Total Size (MB): 74.62
 ==========================================================================================

@@ -48,9 +48,8 @@ datalists:
 It looks like this:
 
 ```csv
-ID,effect_id,tensor_filepath
-0001,0,/path/to/modulated_tensors/train/0/0001.pt
-0001,1,/path/to/modulated_tensors/train/1/0001.pt
+ID,effect_id,raw_tensor_path,modulated_tensor_path 
+wave_id,effect_id,/path/to/raw_tensors/split/effect_id/0001.pt,/path/to/modulated_tensors/split/effect_id/wave_id.pt
 ```
 
 **IMPORTANT**

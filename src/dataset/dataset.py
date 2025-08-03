@@ -55,14 +55,13 @@ class VocoMorphDataset(Dataset):
         self, index
     ) -> Tuple[Tuple[int, torch.Tensor, torch.Tensor], torch.Tensor]:
         row = self.df.iloc[index]
-        id: int = row["ID"]
+        id = int(row["ID"])
         effect_id = row["effect_id"]
-        tensor_filepath = row["tensor_filepath"]
 
-        full_modulated = self._load_tensor(tensor_filepath)
+        modulated_path = row["modulated_tensor_path"]
+        raw_path = row["raw_tensor_path"]
 
-        # get raw tensor from effect_id = 0
-        raw_path = Path(tensor_filepath).parent.parent.joinpath("0", f"{id}.pt")
+        full_modulated = self._load_tensor(modulated_path)
         full_raw = self._load_tensor(str(raw_path))
 
         waveform_length = full_raw.shape[1]
@@ -118,7 +117,7 @@ def get_dataloaders(
     """
     dataloaders = {}
     DATA_ROOT = Path(os.environ["DATA_ROOT"])
-    dataset_name = config["dataset_name"]
+    dataset_name = config["dataset"]
     for split in splits:
         datalist_filepath = DATA_ROOT.joinpath(
             dataset_name, "datalists", config["datalists"][split]["path"]

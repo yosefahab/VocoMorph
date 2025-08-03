@@ -30,14 +30,14 @@ config:
 
     datalists:
       train:
-        batch_size: 8
-        path: "data/datalists/timit_train.csv"
+        batch_size: 32
+        path: "librispeech_train_augmented.csv"
       valid:
-        batch_size: 8
-        path: "data/datalists/timit_valid.csv"
+        batch_size: 32
+        path: "librispeech_valid_augmented.csv"
       test:
         batch_size: 1
-        path: "data/datalists/timit_test.csv"
+        path: "librispeech_test_augmented.csv"
 
     effects:
       [

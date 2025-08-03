@@ -105,23 +105,17 @@ def _augment_wav(args: Tuple[str, Path, int, Path, List[Callable]]):
     processed_data = []
 
     # save raw as effect_id = 0
-    raw_dir = output_dir.joinpath("0")
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    raw_path = raw_dir.joinpath(f"{wav_id}.pt")
+    raw_path = output_dir.joinpath("raw", f"{wav_id}.pt")
     torch.save(raw_wave_tensor, raw_path)
-    processed_data.append(
-        {"ID": wav_id, "effect_id": 0, "tensor_filepath": str(raw_path)}
-    )
 
     # save modulated starting from effect_id = 1
-    for eid, modulated_wave_tensor in enumerate(modulated_wave_tensors, start=1):
+    for eid, modulated_wave_tensor in enumerate(modulated_wave_tensors):
         effect_dir = output_dir.joinpath(str(eid))
-        effect_dir.mkdir(parents=True, exist_ok=True)
         effect_path = effect_dir.joinpath(f"{wav_id}.pt")
         torch.save(modulated_wave_tensor, effect_path)
 
         processed_data.append(
-            {"ID": wav_id, "effect_id": eid, "tensor_filepath": str(effect_path)}
+            {"ID": wav_id, "effect_id": eid, "raw_tensor_path": str(raw_path), "modulated_tensor_path": str(effect_path)}
         )
 
     return processed_data
@@ -149,11 +143,17 @@ def augment_files(
     if output_dir.exists():
         logger.warning(f"Augmentation directory {output_dir} already exists, removing")
         shutil.rmtree(output_dir)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # pre-load the function references
     effects_funcs = get_functions_by_name(effects)
 
+    # create directory for raw waves
+    output_dir.joinpath("raw").mkdir(parents=True, exist_ok=True)
+    # for all effects, create a directory at outputdir
+    for i in range(len(effects_funcs)):
+        output_dir.joinpath(str(i)).mkdir(parents=True, exist_ok=True)
+    
     num_workers = max(1, int((os.cpu_count() or 1) * 0.8))
     logger.info(f"Using {num_workers} workers to augment ({len(df)}) files")
     results = []
