@@ -2,26 +2,45 @@
 
 import librosa
 import numpy as np
+import pyloudnorm as pyln
 from numpy.typing import NDArray
 
 
-def identity_transform(audio: NDArray, sr: int) -> NDArray:
+def apply_identity_transform(audio: NDArray, sr: int) -> NDArray:
     return audio
 
 
-def normalize_audio(original_audio: NDArray, new_audio: NDArray) -> NDArray:
-    """
-    Normalizes an audio array of samples to match the RMS (loudness) of the original.
-    Ensures output does not exceed [-1, 1] to prevent clipping.
-    """
-    target_rms = np.sqrt(np.mean(original_audio**2, axis=-1, keepdims=True))
+def reverse_audio(audio: NDArray, sr: int) -> NDArray:
+    return audio[:, ::-1]
+
+
+def normalize_lufs(reference_audio: NDArray, new_audio: NDArray, sr: int) -> NDArray:
+    meter = pyln.Meter(sr)
+    try:
+        target_lufs = meter.integrated_loudness(reference_audio)
+        input_lufs = meter.integrated_loudness(new_audio)
+    except Exception as _:
+        return new_audio
+
+    return pyln.normalize.loudness(new_audio, input_lufs, target_lufs)
+
+
+def normalize_rms(reference_audio: NDArray, new_audio: NDArray) -> NDArray:
+    target_rms = np.sqrt(np.mean(reference_audio**2, axis=-1, keepdims=True))
     current_rms = np.sqrt(np.mean(new_audio**2, axis=-1, keepdims=True))
 
     if np.any(current_rms == 0) or np.any(target_rms == 0):
-        return np.zeros_like(new_audio)
+        return new_audio
 
-    normalized_audio = new_audio * (target_rms / current_rms)
-    return np.clip(normalized_audio, -1, 1)
+    normalized = new_audio * (target_rms / current_rms)
+    return np.clip(normalized, -1, 1)
+
+
+def mix_lufs(tracks: list[NDArray], sr: int) -> NDArray:
+    normalized_tracks = [normalize_lufs(tracks[0], track, sr) for track in tracks[1:]]
+    mixed = np.sum(normalized_tracks, axis=0)
+    final = normalize_lufs(tracks[0], mixed, sr)
+    return np.clip(final, -1, 1)
 
 
 def convert_to_mono(audio: NDArray) -> NDArray:
@@ -33,17 +52,14 @@ def convert_to_mono(audio: NDArray) -> NDArray:
     return audio
 
 
-def apply_time_stretch(audio: NDArray, _sr: int, rate: float = 0.7) -> NDArray:
+def apply_time_stretch(audio: NDArray, sr: int, rate: float = 0.7) -> NDArray:
     """
     Stretches or compresses the audio in time without altering pitch.
     """
     if audio.ndim == 1:
-        return normalize_audio(audio, librosa.effects.time_stretch(audio, rate=rate))
+        return librosa.effects.time_stretch(audio, rate=rate)
     return np.stack(
-        [
-            normalize_audio(channel, librosa.effects.time_stretch(channel, rate=rate))
-            for channel in audio
-        ],
+        [librosa.effects.time_stretch(channel, rate=rate) for channel in audio],
     )
 
 
@@ -53,12 +69,16 @@ def apply_pitch_shift(audio: NDArray, sr: int, n_steps: float = 6) -> NDArray:
     """
     return np.stack(
         [
-            normalize_audio(
-                channel, librosa.effects.pitch_shift(channel, sr=sr, n_steps=n_steps)
-            )
+            librosa.effects.pitch_shift(channel, sr=sr, n_steps=n_steps)
             for channel in audio
         ]
     )
+
+
+def apply_gain(audio: NDArray, gain_db: float) -> NDArray:
+    factor = 10 ** (gain_db / 20)
+    out = audio * factor
+    return np.clip(out, -1.0, 1.0)
 
 
 def apply_compression(
@@ -76,3 +96,26 @@ def apply_compression(
     ) / np.abs(audio[above_threshold])
 
     return audio * gain
+
+
+def apply_modulation(
+    audio: NDArray,
+    sr: int,
+    mod_freq: float = 19.0,
+    mod_depth: float = 0.2,
+    mod_type: str = "am",
+) -> NDArray:
+    """
+    applies amplitude or ring modulation to an audio signal
+    """
+    C, T = audio.shape
+    t = np.arange(T) / sr
+    sin_wave = np.sin(2 * np.pi * mod_freq * t).astype(audio.dtype)
+    modulator = 1.0 + mod_depth * sin_wave if mod_type == "am" else sin_wave
+    modulated_audio = audio * modulator
+
+    if mod_type == "am":
+        for c in range(C):
+            modulated_audio[c] = normalize_rms(audio[c], modulated_audio[c])
+
+    return modulated_audio

@@ -41,11 +41,11 @@ config:
 
     effects:
       [
-        "identity_transform",
-        "apply_pitch_shift",
+        "apply_identity_transform",
         "apply_radio_effect",
         "apply_robotic_effect",
-        "apply_scifi_effect",
+        "apply_ghost_effect",
+        "apply_demonic_effect",
       ]
   # ------------------------------------------------------------ #
   model:

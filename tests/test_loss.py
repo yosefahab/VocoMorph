@@ -1,18 +1,27 @@
 import math
+import os
+from pathlib import Path
 
 import torch
 
 from src.trainer.custom.criterions import *
+from src.utils.parsers import parse_yaml
 
 
-def test_loss_functions(config):
+def test_loss_functions():
+    model_dir = Path(os.environ["PROJECT_ROOT"]).joinpath("models", "VocoMorphUnet")
+    assert model_dir.exists(), f"{model_dir} does not exist"
+    yaml_path = model_dir.joinpath("config.yaml")
+    yaml_dict = parse_yaml(yaml_path)
+
+    config = yaml_dict["config"]["data"]
     batch_size = 4
     sample_rate = config["sample_rate"]
     n_fft = config["n_fft"]
     hop_length = config["hop_length"]
     win_length = config["win_length"]
     n_mels = config["n_mels"]
-    audio_length = config["frame_length"]
+    audio_length = config["chunk_size"]
     num_channels = config["channels"]
 
     print("Loss Function Test Suite")

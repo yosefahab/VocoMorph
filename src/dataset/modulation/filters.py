@@ -1,7 +1,8 @@
 """functions to alter audio frequency content"""
 
 from numpy.typing import NDArray
-from scipy.signal import butter, iirnotch, lfilter
+from scipy.signal import butter, iirnotch, lfilter, iirfilter
+from .transformations import apply_gain
 
 
 def apply_bandpass(
@@ -9,7 +10,6 @@ def apply_bandpass(
 ) -> NDArray:
     """Applies a bandpass filter to an audio signal with shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
-    audio = audio.astype(audio.dtype)
     nyq = sr / 2
     low = max(low, 1) / nyq
     high = min(high, nyq - 1) / nyq
@@ -20,7 +20,6 @@ def apply_bandpass(
 def apply_lowpass(audio: NDArray, sr: int, cutoff: float = 1000, order=5) -> NDArray:
     """Applies a low-pass filter to an audio signal of shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
-    audio = audio.astype(audio.dtype)
     nyq = sr / 2
     normal_cutoff = cutoff / nyq
     b, a = butter(order, normal_cutoff, btype="low")
@@ -30,7 +29,6 @@ def apply_lowpass(audio: NDArray, sr: int, cutoff: float = 1000, order=5) -> NDA
 def apply_highpass(audio: NDArray, sr: int, cutoff: float = 500, order=5) -> NDArray:
     """Applies a high-pass filter to an audio signal of shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
-    audio = audio.astype(audio.dtype)
     nyq = sr / 2
     normal_cutoff = cutoff / nyq
     b, a = butter(order, normal_cutoff, btype="high")
@@ -42,7 +40,6 @@ def apply_notch(
 ) -> NDArray:
     """Applies a notch filter to remove a specific frequency from an audio signal of shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
-    audio = audio.astype(audio.dtype)
     nyq = sr / 2
     freq = notch_freq / nyq
     b, a = iirnotch(freq, quality_factor, fs=sr)
@@ -54,9 +51,25 @@ def apply_bandstop(
 ) -> NDArray:
     """Applies a band-stop filter to remove a frequency range from an audio signal of shape (C, T) and returns float32."""
     assert audio.ndim == 2, "Input audio must have shape (C, T)"
-    audio = audio.astype(audio.dtype)
     nyq = sr / 2
     low = lowcut / nyq
     high = highcut / nyq
     b, a = butter(order, [low, high], btype="bandstop")
     return lfilter(b, a, audio, axis=1).astype(audio.dtype)
+
+
+def equalize(
+    audio: NDArray, sr: int, mode: str = "bass_boost", gain_db: float = 6.0
+) -> NDArray:
+    nyquist = 0.5 * sr
+    modes = {
+        "bass_boost": ((150.0 / nyquist), "low"),
+        "bass_cut": ((150.0 / nyquist), "high"),
+        "treble_boost": ((4000.0 / nyquist), "high"),
+        "treble_cut": ((4000.0 / nyquist), "low"),
+    }
+    assert mode in modes
+    cutoff, btype = modes[mode]
+    b, a = iirfilter(N=2, Wn=cutoff, btype=btype, ftype="butter", output="ba")
+    filtered = lfilter(b, a, audio)
+    return apply_gain(filtered, gain_db).astype(audio.dtype)

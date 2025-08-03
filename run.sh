@@ -7,7 +7,7 @@ CUDA_VISIBLE_DEVICES="0"
 USE_DDP=false
 
 #! common arguments for run.py, edit this according to your experiment!
-EXP_ARGS="--mode train --model-name VocoMorphUnet --device gpu"
+EXP_ARGS="--mode train --model VocoMorphUnet --device gpu"
 
 if [ "$USE_DDP" = "true" ]; then
   # DDP-specific environment variables

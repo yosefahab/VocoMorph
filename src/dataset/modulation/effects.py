@@ -1,4 +1,6 @@
-"""functions to alter audio perception"""
+# """functions to alter audio perception"""
+#
+from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
@@ -8,13 +10,18 @@ from .filters import apply_bandpass, apply_lowpass
 from .synthesis import generate_carrier, generate_noise
 from .transformations import (
     apply_compression,
+    apply_gain,
+    apply_identity_transform,
+    apply_modulation,
     apply_pitch_shift,
-    identity_transform,
-    normalize_audio,
+    mix_lufs,
+    normalize_lufs,
+    normalize_rms,
+    reverse_audio,
 )
 
 
-def apply_bit_crush(audio: NDArray, bit_depth: int = 8) -> NDArray:
+def apply_bit_crush(audio: NDArray, sr: int = -1, bit_depth: int = 8) -> NDArray:
     """
     Compresses/reduces fidelity of audio
     """
@@ -56,25 +63,60 @@ def apply_chorus(
     return (1 - mix) * audio + mix * chorus_signal
 
 
-def apply_reverb(audio: NDArray, sr: int, delay=70, decay=0.3) -> NDArray:
+def apply_reverb(
+    audio: NDArray,
+    sr: int,
+    pre_delay=70,
+    decay=0.3,
+    reverberance=0.5,
+    wet_gain_db: float = 0.0,
+    dry_gain_db: float = 0.0,
+    room_size: float = 0.8,
+    damping: float = 0.5,
+) -> NDArray:
     """
-    apply reverb effect to the audio by applying a simple convolution reverb filter
+    Apply reverb effect to the audio by applying a simple convolution reverb filter.
+
+    Parameters:
+        audio (NDArray): Audio array of shape (channels, samples)
+        sr (int): Sample rate
+        pre_delay (float): Silence before reverb start (ms)
+        decay (float): Per-echo decay factor
+        reverberance (float): Amount of reverb (0.0–1.0), controls number of echoes
+        wet_gain_db (float): Gain applied to the reverb tail (dB)
+        dry_gain_db (float): Gain applied to the original signal (dB)
+        room_size (float): Scales echo density and length (0.0–1.0)
+        damping (float): High-frequency attenuation over echo time (0.0–1.0)
     """
     C, T = audio.shape
-    delay_samples = int((delay / 1_000) * sr)
-    impulse = np.zeros(delay_samples + 1)
-    impulse[0] = 1
-    impulse[delay_samples] = decay
+
+    pre_delay_samples = int((pre_delay / 1_000) * sr)
+    echo_spacing = int(sr * 0.05 * room_size)
+    num_echoes = max(1, int(reverberance * room_size * 12))
+
+    impulse_len = pre_delay_samples + echo_spacing * num_echoes + 1
+    impulse = np.zeros(impulse_len)
+    impulse[pre_delay_samples] = 1.0
+
+    for i in range(1, num_echoes + 1):
+        pos = pre_delay_samples + i * echo_spacing
+        attenuation = decay**i
+        hf_rolloff = 1.0 - damping * (i / num_echoes)
+        impulse[pos] = attenuation * hf_rolloff
+
+    wet_gain = 10 ** (wet_gain_db / 20)
+    dry_gain = 10 ** (dry_gain_db / 20)
 
     output = np.zeros_like(audio)
     for c in range(C):
         y_reverb = np.convolve(audio[c], impulse, mode="full")[:T]
-        output[c] = normalize_audio(audio[c], y_reverb)
+        y_reverb = normalize_rms(audio[c], y_reverb)
+        output[c] = np.clip(audio[c] * dry_gain + y_reverb * wet_gain, -1.0, 1.0)
 
     return output
 
 
-def apply_echo(
+def apply_echo_effect(
     audio: NDArray,
     sr: int,
     delay: int = 500,
@@ -103,7 +145,7 @@ def apply_echo(
                 decay**n
             )  # decay factor applied progressively
 
-    output = normalize_audio(audio, output)
+    output = normalize_rms(audio, output)
     return output
 
 
@@ -121,8 +163,8 @@ def apply_tremolo(
 
 def apply_vocoder(
     audio: NDArray,
-    carrier: NDArray,
     sr: int,
+    carrier: Optional[NDArray] = None,
     num_bands: int = 8,
     min_freq: float = 100,
     max_freq: float = 4000,
@@ -130,6 +172,9 @@ def apply_vocoder(
     """
     Applies a basic vocoder effect by modulating a carrier wave with the input audio's frequency envelopes.
     """
+    if carrier is None:
+        carrier = generate_carrier(audio.shape, sr, wave_type="square", freq=150)
+
     assert audio.shape == carrier.shape, (
         "Audio and carrier must have the same shape (C, T)"
     )
@@ -140,7 +185,7 @@ def apply_vocoder(
         low, high = band_edges[i], band_edges[i + 1]
         filtered_audio = apply_bandpass(audio, sr, low, high, order=2)
         envelope = np.abs(filtered_audio)
-        envelope = apply_lowpass(envelope, sr, cutoff=10, order=1)
+        envelope = apply_lowpass(envelope, sr, cutoff=50, order=1)
         carrier_band = apply_bandpass(carrier, sr, low, high, order=2)
         output += envelope * carrier_band
 
@@ -154,29 +199,6 @@ def apply_sidechain(audio: NDArray, kick: NDArray, reduction: float = 0.5) -> ND
     env = np.convolve(np.abs(kick), np.ones(100) / 100, mode="same")
     gain = 1.0 - (env / np.max(env)) * reduction
     return audio * gain
-
-
-def apply_modulation(
-    audio: NDArray,
-    sr: int,
-    mod_freq: float = 19.0,
-    mod_depth: float = 0.2,
-    mod_type: str = "am",
-) -> NDArray:
-    """
-    applies amplitude or ring modulation to an audio signal
-    """
-    C, T = audio.shape
-    t = np.arange(T) / sr
-    sin_wave = np.sin(2 * np.pi * mod_freq * t).astype(audio.dtype)
-    modulator = 1.0 + mod_depth * sin_wave if mod_type == "am" else sin_wave
-    modulated_audio = audio * modulator
-
-    if mod_type == "am":
-        for c in range(C):
-            modulated_audio[c] = normalize_audio(audio[c], modulated_audio[c])
-
-    return modulated_audio
 
 
 def apply_direction_effect(
@@ -200,38 +222,15 @@ def apply_direction_effect(
         left *= 1 - pan_curve
         right *= pan_curve
 
-    left = normalize_audio(audio[0], left)
-    right = normalize_audio(audio[1], right)
+    left = normalize_rms(audio[0], left)
+    right = normalize_rms(audio[1], right)
     return np.vstack((left, right))
 
 
-def apply_radio_effect(audio: NDArray, sr: int) -> NDArray:
-    # imitate AM radio frequency response
-    mod_audio = apply_bandpass(audio, sr, low=400.0, high=2500.0)
-
-    # simulate low bit-depth compression (reducing fidelity)
-    mod_audio = apply_bit_crush(mod_audio, bit_depth=6)
-
-    # mimick analog signal degradation
-    mod_audio = apply_distortion(mod_audio, 10.0)
-
-    # add amplitude modulation (signal wobble)
-    mod_audio = apply_modulation(
-        mod_audio, sr, mod_freq=50.0, mod_depth=0.1, mod_type="am"
-    )
-
-    # add random white noise (radio static)
-    noise = generate_noise(mod_audio.shape, 0.009, "white", mod_audio.dtype)
-    mod_audio = mod_audio + noise
-
-    audio = normalize_audio(audio, mod_audio)
-
-    return audio
-
-
+#
 def apply_scifi_effect(audio: NDArray, sr: int) -> NDArray:
     audio = apply_pitch_shift(audio, sr, -1)
-    audio = apply_modulation(audio, sr, mod_freq=80, mod_type="am")
+    audio = apply_modulation(audio, sr, 20, 0.6, "am")
     audio = apply_bit_crush(audio, bit_depth=16)
     audio = apply_chorus(audio, sr, delay=0.005)
     audio = apply_distortion(audio, gain=2)
@@ -239,50 +238,41 @@ def apply_scifi_effect(audio: NDArray, sr: int) -> NDArray:
     return audio
 
 
-def apply_robotic_effect(audio: NDArray, sr: int) -> NDArray:
-    carrier = generate_carrier(audio.shape, sr, wave_type="square", freq=150)
-    audio = apply_vocoder(audio, carrier, sr, num_bands=32, max_freq=4000)
+def apply_autotuner_effect(audio: NDArray, sr: int) -> NDArray:
+    carrier = generate_carrier(audio.shape, sr, wave_type="sawtooth", freq=300)
+    audio = apply_vocoder(audio, sr, carrier, num_bands=50)
+    # audio = apply_compression(audio, threshold=-15, ratio=3.0)
+    # # slightly shorter delay, gentle decayreturn
+    # audio = apply_reverb(audio, sr, 50, decay=0.25)
     return audio
 
 
-def apply_autotuner_effect(audio: NDArray, sr: int) -> NDArray:
-    carrier = generate_carrier(audio.shape, sr, wave_type="sawtooth", freq=300)
-    audio = apply_vocoder(audio, carrier, sr, num_bands=50, max_freq=5000)
-    audio = apply_compression(audio, threshold=-15, ratio=3.0)
-    audio = apply_reverb(
-        audio, sr, delay=50, decay=0.25
-    )  # slightly shorter delay, gentle decay
+def apply_robotic_effect(audio: NDArray, sr: int) -> NDArray:
+    audio = apply_reverb(audio, sr, 20, 0.3, 0.3, room_size=0.3)
+    audio = apply_pitch_shift(audio, sr, 1.68)
+    return audio
+
+
+def apply_radio_effect(audio: NDArray, sr: int) -> NDArray:
+    mod_audio = apply_bandpass(audio, sr, low=400.0, high=2000.0)
+    mod_audio = apply_bit_crush(mod_audio, bit_depth=8)
+    noise = generate_noise(mod_audio.shape, 0.8, "white", mod_audio.dtype)
+    audio = mix_lufs([noise, mod_audio], sr)
+
     return audio
 
 
 def apply_ghost_effect(audio: NDArray, sr: int) -> NDArray:
-    audio = apply_pitch_shift(audio, sr, 3)
-
-    carrier = generate_noise(
-        audio.shape, noise_type="white", noise_level=0.001, dtype=audio.dtype
-    )
-    mod_audio = apply_vocoder(audio, carrier, sr, num_bands=32, max_freq=6000)
-
-    echoed = apply_echo(mod_audio, sr, delay=400, decay=0.4)
-    mod_audio = 0.3 * mod_audio + 0.7 * echoed
-    mod_audio = apply_reverb(mod_audio, sr, decay=0.7)
-
-    return mod_audio
+    ghost = reverse_audio(audio, sr)
+    ghost = apply_reverb(ghost, sr, 150, 0.5, 0.6, 0, -10, 0.85, 0.7)
+    ghost = reverse_audio(ghost, sr)
+    audio = apply_gain(audio, -22)
+    return mix_lufs([audio, ghost], sr)
 
 
-def apply_monster_effect(audio: NDArray, sr: int) -> NDArray:
-    low_pitch = apply_pitch_shift(audio, sr, -12)
-    mid_pitch = apply_pitch_shift(audio, sr, -6)
-    high_pitch = apply_pitch_shift(audio, sr, -3)
-    mod_audio = (low_pitch + mid_pitch * 0.6 + high_pitch * 0.3) / 2.0
-
-    # non linear distortion
-    mod_audio = np.sign(mod_audio) * np.sqrt(np.abs(mod_audio))
-
-    mod_audio = apply_lowpass(mod_audio, cutoff=1500, sr=sr)
-
-    mod_audio = apply_tremolo(mod_audio, sr, 30)
-
-    audio = normalize_audio(audio, mod_audio)
-
-    return audio
+def apply_demonic_effect(audio: NDArray, sr: int) -> NDArray:
+    dtype = audio.dtype
+    audio1 = apply_pitch_shift(apply_gain(audio, -3), sr, -1)
+    audio = apply_pitch_shift(audio, sr, -1.78)
+    audio2 = apply_pitch_shift(apply_gain(audio, +3), sr, -7.72)
+    return mix_lufs([audio, audio1, audio2], sr).astype(dtype)

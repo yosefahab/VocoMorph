@@ -17,7 +17,7 @@ assert os.environ.get("PROJECT_ROOT") is not None
 
 
 def main(args: Namespace, config: DictConfig):
-    model_dir = Path(os.environ["PROJECT_ROOT"]).joinpath("models", args.model_name)
+    model_dir = Path(os.environ["PROJECT_ROOT"]).joinpath("models", args.model)
     model = create_model_instance(model_dir, config["model"])
 
     device_type = args.device

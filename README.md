@@ -7,7 +7,11 @@ A Neural Voice Modulation Vocoder
 Contains the driver code for the entire project. `run.sh` is a wrapper around `run.py` for convenience.
 Optionally, set $PROJECT_ROOT env var to the directory of the project, otherwise it will be set automatically to the directory of `run.py`.
 You can also set $DATA_ROOT if you're storing your data elsewhere, otherwise it will be set automatically as $PROJECT_ROOT/data
-eg run: `python run.py --engine-mode train --model-name VocoMorph`
+eg run: `python run.py --engine-mode train --model VocoMorph`
+
+## run.sh
+
+Wrapper around run.py for convenience. It supports DDP training via `torchrun` or regular training (note: this adds the -ddp flag to run.py).
 
 ## Training
 
@@ -26,18 +30,31 @@ This is where config parameters for the model, as well as any other configuratio
 
 ### datalists:
 
+These are csv files that contain the paths to the training samples.
+
 ```yaml
 datalists:
   train:
     batch_size: 1
-    path: "path/relative/to/$PROJECT_ROOT"
+    path: "path/relative/to/$DATA_ROOT"
   valid:
     batch_size: 1
-    path: "path/relative/to/$PROJECT_ROOT"
+    path: "path/relative/to/$DATA_ROOT"
   test:
     batch_size: 1
-    path: "path/relative/to/$PROJECT_ROOT"
+    path: "path/relative/to/$DATA_ROOT"
 ```
+
+It looks like this:
+
+```csv
+ID,effect_id,tensor_filepath
+0001,0,/path/to/modulated_tensors/train/0/0001.pt
+0001,1,/path/to/modulated_tensors/train/1/0001.pt
+```
+
+**IMPORTANT**
+`effect_id` 0 is always the raw waveform. This means that for every other `effect_id` > 0, there has to exist a wave with the same ID with `effect_id` == 0.
 
 ### Custom classes
 
@@ -97,4 +114,4 @@ dummy_input:
 ## Inference
 
 For inference, a checkpoint and sample file are needed.
-`python run.py --mode infer_sample --sample-file /path/to/sample.wav --model-name VocoMorph --checkpoint-path /path/to/checkpoint`
+`python run.py --mode infer_sample --sample-file /path/to/sample.wav --model VocoMorph --checkpoint-path /path/to/checkpoint`

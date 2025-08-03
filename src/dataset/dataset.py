@@ -1,8 +1,9 @@
 import os
+import random
+from collections import OrderedDict
 from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Dict, List, Tuple
-from collections import OrderedDict
 
 import pandas as pd
 import torch
@@ -23,9 +24,11 @@ class VocoMorphDataset(Dataset):
         self.fs = config["sample_rate"]
         self.channels = config["channels"]
         self.chunk_size = config["chunk_size"]
+
         self.datalist_filepath = datalist_filepath
 
-        self.lru_tensor_cache = OrderedDict()
+        # A simple in-memory LRU cache
+        self.tensor_cache = OrderedDict()
         self.cache_size = config.get("cache_size", 100)
 
         self.df = pd.read_csv(datalist_filepath)
@@ -38,38 +41,41 @@ class VocoMorphDataset(Dataset):
 
     def _load_tensor(self, filepath: str):
         """Loads a tensor file into the cache."""
-        if filepath not in self.lru_tensor_cache:
-            if len(self.lru_tensor_cache) >= self.cache_size:
-                self.lru_tensor_cache.popitem(last=False)
-            self.lru_tensor_cache[filepath] = torch.load(filepath)
+        if filepath not in self.tensor_cache:
+            if len(self.tensor_cache) >= self.cache_size:
+                # remove the least recently used item
+                self.tensor_cache.popitem(last=False)
+            self.tensor_cache[filepath] = torch.load(filepath)
 
-        self.lru_tensor_cache.move_to_end(filepath)
-        return self.lru_tensor_cache[filepath]
+        # move the accessed sample to the end to mark it as most recently used
+        self.tensor_cache.move_to_end(filepath)
+        return self.tensor_cache[filepath]
 
     def __getitem__(
         self, index
     ) -> Tuple[Tuple[int, torch.Tensor, torch.Tensor], torch.Tensor]:
-        """
-        Returns:
-        - wave ID
-        - effect ID tensor
-        - raw wave chunk (C, chunk_size)
-        - modulated wave chunk (C, chunk_size)
-        """
         row = self.df.iloc[index]
         id: int = row["ID"]
         effect_id = row["effect_id"]
         tensor_filepath = row["tensor_filepath"]
-        chunk_index = row["chunk_index"]
 
-        # get the large tensor, loading it from disk if not in cache
-        large_tensor = self._load_tensor(tensor_filepath)
-        raw_chunks_tensor = large_tensor["raw"]
-        modulated_chunks_tensor = large_tensor["modulated"]
+        full_modulated = self._load_tensor(tensor_filepath)
 
-        # slice the large tensor to get the specific chunk
-        raw_chunk = raw_chunks_tensor[chunk_index]
-        modulated_chunk = modulated_chunks_tensor[chunk_index]
+        # get raw tensor from effect_id = 0
+        raw_path = Path(tensor_filepath).parent.parent.joinpath("0", f"{id}.pt")
+        full_raw = self._load_tensor(str(raw_path))
+
+        waveform_length = full_raw.shape[1]
+        # FIX: perhaps pad?
+        if waveform_length < self.chunk_size:
+            self.logger.warning(
+                f"Waveform {id} is too short ({waveform_length}) for chunk size {self.chunk_size}. Skipping."
+            )
+            return None  # pyright: ignore[reportReturnType]
+
+        start_idx = random.randint(0, waveform_length - self.chunk_size)
+        raw_chunk = full_raw[:, start_idx : start_idx + self.chunk_size]
+        modulated_chunk = full_modulated[:, start_idx : start_idx + self.chunk_size]
 
         assert raw_chunk.shape[1] == self.chunk_size
         assert modulated_chunk.shape[1] == self.chunk_size
@@ -81,8 +87,11 @@ class VocoMorphDataset(Dataset):
 
 def collate_fn(batch):
     """
-    Collates a batch of pre-chunked tensors.
+    Collates a batch of tensors, filtering out any 'None' items.
     """
+    # filter out any None values that might be returned for short audio files
+    batch = [item for item in batch if item is not None]
+
     first_elems, modulated_waves = zip(*batch)
     ids, effect_ids, raw_waves = zip(*first_elems)
 

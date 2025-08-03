@@ -31,7 +31,7 @@ def parse_args():
         help="Download a dataset. Default: timit.",
     )
     parser.add_argument(
-        "--model-name",
+        "--model",
         type=str,
         default="VocoMorphUnet",
         help="Name of the model to use.",
@@ -87,7 +87,7 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
 
-    model_dir = Path(os.environ["PROJECT_ROOT"]).joinpath("models", args.model_name)
+    model_dir = Path(os.environ["PROJECT_ROOT"]).joinpath("models", args.model)
     assert model_dir.exists(), f"{model_dir} does not exist"
     yaml_path = model_dir.joinpath("config.yaml")
     yaml_dict = parse_yaml(yaml_path)

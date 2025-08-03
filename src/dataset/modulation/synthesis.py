@@ -24,7 +24,8 @@ def generate_carrier(
     elif wave_type == "noise":
         noise = np.random.uniform(-1, 1, shape)
     else:
-        noise = np.sin(2 * np.pi * freq * t)  # default to sine wave
+        # default to sine wave
+        noise = np.sin(2 * np.pi * freq * t)
 
     return np.stack([noise] * C)
 
@@ -82,20 +83,18 @@ def generate_noise(
     """
     assert noise_type in ["white", "pink", "brown"]
 
-    if noise_type == "white":
-        noise = np.random.normal(0, 1, shape)
+    noise = np.random.normal(0, 1, shape)
 
-    elif noise_type == "pink":
-        white = np.random.normal(0, 1, shape)
-        b = np.array(
-            [0.02109238, 0.07113478, 0.68873558]
-        )  # filter coefficients for pink noise
+    if noise_type == "pink":
+        # filter coefficients for pink noise
+        b = np.array([0.02109238, 0.07113478, 0.68873558])
         a = np.array([1, -1.3199866, 0.49603215])
-        pink = signal.lfilter(b, a, white)
+        pink = signal.lfilter(b, a, noise)
         noise = pink / np.max(np.abs(pink))
 
     else:
-        brown = np.cumsum(np.random.normal(0, 1, shape))
-        noise = brown / np.max(np.abs(brown))  # normalize to keep levels consistent
+        brown = np.cumsum(noise)
+        # normalize to keep levels consistent
+        noise = brown / np.max(np.abs(brown))
 
     return (noise * noise_level).astype(dtype)
