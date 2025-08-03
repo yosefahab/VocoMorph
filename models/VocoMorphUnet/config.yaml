@@ -11,7 +11,7 @@ config:
   seed: 13
 
   data:
-    num_workers: 5
+    num_workers: null
     pin_memory: true
     drop_last: true
 
@@ -32,10 +32,10 @@ config:
 
     datalists:
       train:
-        batch_size: 32
+        batch_size: 1024
         path: "librispeech_train_augmented.csv"
       valid:
-        batch_size: 32
+        batch_size: 1024
         path: "librispeech_valid_augmented.csv"
       test:
         batch_size: 1

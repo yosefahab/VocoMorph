@@ -39,7 +39,7 @@ class VocoMorphDataset(Dataset):
     def __len__(self) -> int:
         return self.n
 
-    def _load_tensor(self, filepath: str):
+    def _load_tensor_cache(self, filepath: str) -> torch.Tensor:
         """Loads a tensor file into the cache."""
         if filepath not in self.tensor_cache:
             if len(self.tensor_cache) >= self.cache_size:
@@ -51,12 +51,15 @@ class VocoMorphDataset(Dataset):
         self.tensor_cache.move_to_end(filepath)
         return self.tensor_cache[filepath]
 
+    def _load_tensor(self, filepath: str) -> torch.Tensor:
+        return torch.load(filepath)
+
     def __getitem__(
         self, index
-    ) -> Tuple[Tuple[int, torch.Tensor, torch.Tensor], torch.Tensor]:
+    ) -> Tuple[str, torch.Tensor, torch.Tensor, torch.Tensor]:
         row = self.df.iloc[index]
-        id = int(row["ID"])
-        effect_id = row["effect_id"]
+        id = str(row["ID"])
+        effect_id = int(row["effect_id"])
 
         modulated_path = row["modulated_tensor_path"]
         raw_path = row["raw_tensor_path"]
@@ -65,14 +68,15 @@ class VocoMorphDataset(Dataset):
         full_raw = self._load_tensor(str(raw_path))
 
         waveform_length = full_raw.shape[1]
-        # FIX: perhaps pad?
         if waveform_length < self.chunk_size:
-            self.logger.warning(
-                f"Waveform {id} is too short ({waveform_length}) for chunk size {self.chunk_size}. Skipping."
-            )
-            return None  # pyright: ignore[reportReturnType]
+            self.logger.warning(f"Waveform {id} is too short ({waveform_length}) for chunk size {self.chunk_size}")
+            pad_len = self.chunk_size - waveform_length
+            full_raw = torch.nn.functional.pad(full_raw, (0, pad_len))
+            full_modulated = torch.nn.functional.pad(full_modulated, (0, pad_len))
+            start_idx = 0
+        else:
+            start_idx = random.randint(0, waveform_length - self.chunk_size)
 
-        start_idx = random.randint(0, waveform_length - self.chunk_size)
         raw_chunk = full_raw[:, start_idx : start_idx + self.chunk_size]
         modulated_chunk = full_modulated[:, start_idx : start_idx + self.chunk_size]
 
@@ -81,7 +85,7 @@ class VocoMorphDataset(Dataset):
 
         effect_id = torch.tensor(effect_id, dtype=torch.long)
 
-        return ((id, effect_id, raw_chunk), modulated_chunk)
+        return id, effect_id, raw_chunk, modulated_chunk
 
 
 def collate_fn(batch):
@@ -127,7 +131,11 @@ def get_dataloaders(
             f"Datalist for split {split} doesn't exist: {datalist_filepath}"
         )
         logger.info(f"Loading {split} data from: {datalist_filepath}")
-        num_workers = min(config["num_workers"], max(0, cpu_count() - 2))
+        default_workers = max(1, cpu_count() - 2)
+        num_workers = config.get("num_workers")
+        if num_workers is None:
+            num_workers = default_workers
+
         logger.info(f"Using {num_workers} workers for DataLoaders")
         dataset = VocoMorphDataset(config, datalist_filepath=datalist_filepath)
         logger.info(f"Creating dataloader for split: {split}")
@@ -147,10 +155,10 @@ def get_dataloaders(
             dataset=dataset,
             batch_size=split_batch_size,
             shuffle=(split == "train" and not ddp),
-            pin_memory=config["pin_memory"],
+            pin_memory=config.get("pin_memory", True),
             num_workers=num_workers,
             drop_last=drop_last,
-            collate_fn=collate_fn,
+            # collate_fn=collate_fn,
             sampler=sampler,
         )
         dataloaders[split] = dataloader
