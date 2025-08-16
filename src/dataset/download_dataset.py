@@ -132,7 +132,7 @@ def download_librispeech(destination_dir: Path):
 
 def download_timit(destination_dir: Path, remove_zip: bool = True) -> bool:
     """Downloads and extracts the TIMIT dataset."""
-    destination_dir.mkdir(exist_ok=True)
+    destination_dir.mkdir(parents=True, exist_ok=True)
 
     zip_path = destination_dir.joinpath("timit.zip")
 
@@ -167,7 +167,7 @@ def main(dataset: str):
         return
 
     logger.info(f"Downloading dataset: {dataset}.")
-    destination_dir.mkdir(exist_ok=True)
+    destination_dir.mkdir(parents=True, exist_ok=True)
     if dataset == "librispeech":
         download_librispeech(destination_dir)
     elif dataset == "timit":

@@ -439,7 +439,7 @@ class ModelTrainer:
         """
         self.logger.info("Testing model")
         if output_dir is not None:
-            output_dir.mkdir(exist_ok=True)
+            output_dir.mkdir(parents=True, exist_ok=True)
             self.logger.info(f"Saving output to: {output_dir}")
 
         metrics = self.evaluate(test_loader, output_dir=output_dir)

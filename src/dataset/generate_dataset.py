@@ -115,7 +115,12 @@ def _augment_wav(args: Tuple[str, Path, int, Path, List[Callable]]):
         torch.save(modulated_wave_tensor, effect_path)
 
         processed_data.append(
-            {"ID": wav_id, "effect_id": eid, "raw_tensor_path": str(raw_path), "modulated_tensor_path": str(effect_path)}
+            {
+                "ID": wav_id,
+                "effect_id": eid,
+                "raw_tensor_path": str(raw_path),
+                "modulated_tensor_path": str(effect_path),
+            }
         )
 
     return processed_data
@@ -153,7 +158,7 @@ def augment_files(
     # for all effects, create a directory at outputdir
     for i in range(len(effects_funcs)):
         output_dir.joinpath(str(i)).mkdir(parents=True, exist_ok=True)
-    
+
     num_workers = max(1, int((os.cpu_count() or 1) * 0.8))
     logger.info(f"Using {num_workers} workers to augment ({len(df)}) files")
     results = []
@@ -182,6 +187,7 @@ def augment_files(
 
 def create_splits(dataset: str):
     data_root = Path(os.environ["DATA_ROOT"])
+    assert data_root.exists(), f"DATA_ROOT ({data_root}) does not exist!"
     dataset_dir = data_root.joinpath(dataset)
     datalists_dir = dataset_dir.joinpath("datalists")
     datalists_dir.mkdir(exist_ok=True)
