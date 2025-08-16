@@ -3,14 +3,14 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict
 
-import torch
+import torch.nn as nn
 
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-def create_model_instance(model_dir: Path, config: Dict[str, Any]) -> torch.nn.Module:
+def create_model_instance(model_dir: Path, config: Dict[str, Any]) -> nn.Module:
     """Load and instantiate a model by name."""
     model_name = model_dir.name
     try:

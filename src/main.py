@@ -2,14 +2,13 @@ import os
 from argparse import Namespace
 from pathlib import Path
 
-
 from models.factory import create_model_instance
 from src.dataset.dataset import get_dataloaders
 from src.infer import infer
 from src.trainer.checkpointer import Checkpointer
 from src.trainer.strategy import DDPStrategy, SingleDeviceStrategy
 from src.trainer.trainer import ModelTrainer
-from src.utils.device import get_device
+from src.utils.device import set_device
 from src.utils.seed import set_seed
 from src.utils.types import DictConfig
 
@@ -49,7 +48,8 @@ def main(args: Namespace, config: DictConfig):
         checkpointer = Checkpointer(
             model_dir.joinpath("checkpoints"), config, model, [], [], None
         )
-        checkpointer.load_checkpoint(get_device(device_type))
+        set_device(device_type)
+        checkpointer.load_checkpoint()
 
         output_filename = Path(args.sample_file).stem
         output_path = data_root.joinpath("output", output_filename)
@@ -60,7 +60,6 @@ def main(args: Namespace, config: DictConfig):
                 args.sample_file,
                 model,
                 config,
-                device_type=device_type,
                 output_path=output_path,
             )
 

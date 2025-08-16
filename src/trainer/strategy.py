@@ -3,7 +3,7 @@ import os
 
 import torch
 
-from src.utils.device import get_device
+from src.utils.device import set_device
 from src.utils.logger import get_logger
 from src.utils.types import DeviceType
 
@@ -36,7 +36,7 @@ class DDPStrategy(TrainingStrategy):
         self.logger.info(
             f"Using DDP strategy with {device_type} device type, and {backend} backend"
         )
-        self.device = get_device(self.device_type, self.local_rank)
+        self.device = set_device(self.device_type, self.local_rank)
 
         if self.device.type == "mps":
             self.logger.error(
@@ -52,7 +52,9 @@ class DDPStrategy(TrainingStrategy):
 
     def wrap_model(self, model: torch.nn.Module):
         model = model.to(self.device)
-        return torch.nn.parallel.DistributedDataParallel(model, device_ids=[self.local_rank]), self.device
+        return torch.nn.parallel.DistributedDataParallel(
+            model, device_ids=[self.local_rank]
+        ), self.device
 
     def should_log(self) -> bool:
         return self.rank == 0
@@ -68,7 +70,7 @@ class SingleDeviceStrategy(TrainingStrategy):
         self.logger.info("Using SingleDevice strategy")
 
     def wrap_model(self, model: torch.nn.Module):
-        device = get_device(self.device_type)
+        device = set_device(self.device_type)
         return model.to(device), device
 
     def should_log(self) -> bool:

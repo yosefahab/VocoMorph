@@ -137,10 +137,7 @@ class Checkpointer:
             self.logger.info(f"Removed old checkpoint: {old_checkpoint}")
 
     def load_checkpoint(
-        self,
-        device: torch.device,
-        prioritize_best: bool = True,
-        custom_path: Optional[Path] = None,
+        self, prioritize_best: bool = True, custom_path: Optional[Path] = None
     ) -> int:
         """
         Loads a checkpoint into model and training components using the path specified in the model config file.

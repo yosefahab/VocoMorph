@@ -1,10 +1,11 @@
-from typing import Literal, Tuple, TypeVar, Dict, Any
-import torch.optim as optim
+from typing import Any, Dict, Literal, Tuple, TypeVar
 
+from mlx.optimizers import Optimizer, schedulers
 
-DeviceType = Literal["gpu", "cpu"]
-
+DeviceType = Literal["cpu", "gpu"]
 
 T = TypeVar("T")
+
 DictConfig = Dict[str, Any]
-OptimizerScheduler = Tuple[optim.Optimizer, optim.lr_scheduler._LRScheduler | None]
+
+OptimizerScheduler = Tuple[Optimizer, schedulers.Callable | None]

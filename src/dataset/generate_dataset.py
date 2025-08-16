@@ -2,11 +2,10 @@ import os
 import shutil
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
-import torch
-from numpy.typing import NDArray
 from tqdm import tqdm
 
 from src.dataset.modulation.utils import get_functions_by_name
@@ -30,24 +29,20 @@ def create_split_csv(dataset_dir: Path, output_csv: Path):
 
     logger.info(f"Scanning {dataset_dir} for wave files")
 
-    # collect all file paths and assign integer IDs
     audio_files = []
     id_counter = 0
     for root, _, files in os.walk(dataset_dir):
         root = Path(root)
         for file in files:
-            if file.lower().endswith(".wav") or file.lower().endswith(".flac"):
-                audio_files.append(
-                    {"ID": id_counter, "raw_wav_path": str(root.joinpath(file))}
-                )
-                id_counter += 1
+            if not file.lower().endswith((".wav", ".flac")):
+                continue
+            audio_files.append(
+                {"ID": id_counter, "raw_wav_path": str(root.joinpath(file))}
+            )
+            id_counter += 1
 
     df = pd.DataFrame(audio_files)
-
-    # calculate the zer-padding width based on the total number of files
     padding_width = len(str(id_counter - 1)) if id_counter > 0 else 1
-
-    # zero-pad the IDs
     df["ID"] = df["ID"].apply(lambda x: f"{x:0{padding_width}d}")
 
     logger.info(f"Found {len(df)} wave files")
@@ -63,15 +58,9 @@ def split_dataset_csv(
 ):
     """
     Splits a dataset CSV into train and validation CSVs.
-    Args:
-    - input_csv: Path to the full dataset CSV.
-    - output_csv: Path to save the validation CSV.
-    - split_ratio: (train, validation) split ratios.
-    - shuffle: whether to shuffle the rows before splitting.
     """
     assert input_csv.exists(), f"{input_csv} does not exist"
     logger.info(f"Splitting {input_csv} into {split_ratio}")
-    # read ID column as string to preserve zero-padding
     df = pd.read_csv(input_csv, dtype={"ID": str})
     if shuffle:
         df = df.sample(frac=1).reset_index(drop=True)
@@ -86,43 +75,41 @@ def split_dataset_csv(
     df.iloc[train_end:valid_end].to_csv(output_csv, index=False)
 
 
-def apply_effects(audio: NDArray, sr: int, effects_funcs: List[Callable]):
+def _augment_wav(args: Tuple[str, Path, int, Path, List[Tuple[int, Callable]]]):
     """
-    Apply audio effects using pre-loaded functions.
+    Loads one audio file, applies effects, and saves all waveforms to a single .npz file.
+    Returns a list of dictionaries for each generated effect.
     """
-    return [ef(audio=audio, sr=sr) for ef in effects_funcs]
-
-
-def _augment_wav(args: Tuple[str, Path, int, Path, List[Callable]]):
-    wav_id, raw_wav_path, sr, output_dir, effects_funcs = args
+    wav_id, raw_wav_path, sr, output_dir, effects_funcs_with_ids = args
 
     raw_wave, _ = load_audio(raw_wav_path, sr)
-    modulated_waves = apply_effects(raw_wave, sr, effects_funcs)
 
-    raw_wave_tensor = torch.from_numpy(raw_wave).float()
-    modulated_wave_tensors = [torch.from_numpy(w).float() for w in modulated_waves]
+    arrays_to_save: Dict[str, np.ndarray] = {"wave_0": raw_wave}
+
+    for eid, ef in effects_funcs_with_ids:
+        modulated_wave = ef(audio=raw_wave, sr=sr)
+        arrays_to_save[f"wave_{eid}"] = modulated_wave
+
+    output_path = output_dir.joinpath(f"{wav_id}.npz")
+    np.savez_compressed(output_path, **arrays_to_save)
 
     processed_data = []
-
-    # save raw as effect_id = 0
-    raw_path = output_dir.joinpath("raw", f"{wav_id}.pt")
-    torch.save(raw_wave_tensor, raw_path)
-
-    # save modulated starting from effect_id = 1
-    for eid, modulated_wave_tensor in enumerate(modulated_wave_tensors):
-        effect_dir = output_dir.joinpath(str(eid))
-        effect_path = effect_dir.joinpath(f"{wav_id}.pt")
-        torch.save(modulated_wave_tensor, effect_path)
-
+    # create one record for the raw wave (ID 0) and one for each modulated wave
+    processed_data.append(
+        {
+            "ID": wav_id,
+            "effect_id": 0,
+            "data_path": str(output_path),
+        }
+    )
+    for eid, _ in effects_funcs_with_ids:
         processed_data.append(
             {
                 "ID": wav_id,
                 "effect_id": eid,
-                "raw_tensor_path": str(raw_path),
-                "modulated_tensor_path": str(effect_path),
+                "data_path": str(output_path),
             }
         )
-
     return processed_data
 
 
@@ -135,12 +122,6 @@ def augment_files(
 ):
     """
     Reads a dataset CSV, applies effects in parallel, and saves full-length tensors to a new CSV.
-    Args:
-    - input_csv: Path to train/valid/test CSV.
-    - sr: Sample rate of the waves.
-    - effects: List of effects to apply.
-    - output_dir: Where to save the output tensor files.
-    - output_csv: Path to save the new CSV with augmented file information.
     """
     df = pd.read_csv(input_csv, dtype={"ID": str})
     logger.info(f"Augmenting waves from {input_csv}")
@@ -150,18 +131,15 @@ def augment_files(
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # pre-load the function references
     effects_funcs = get_functions_by_name(effects)
 
-    # create directory for raw waves
-    output_dir.joinpath("raw").mkdir(parents=True, exist_ok=True)
-    # for all effects, create a directory at outputdir
-    for i in range(len(effects_funcs)):
-        output_dir.joinpath(str(i)).mkdir(parents=True, exist_ok=True)
+    # map each effect function to an ID, starting from 1
+    effects_funcs_with_ids = [(i, ef) for i, ef in enumerate(effects_funcs, start=1)]
 
     num_workers = max(1, int((os.cpu_count() or 1) * 0.8))
     logger.info(f"Using {num_workers} workers to augment ({len(df)}) files")
-    results = []
+    results: List[Dict[str, Any]] = []
+
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = [
             executor.submit(
@@ -171,7 +149,7 @@ def augment_files(
                     Path(str(row["raw_wav_path"])),
                     sr,
                     output_dir,
-                    effects_funcs,
+                    effects_funcs_with_ids,
                 ),
             )
             for _, row in df.iterrows()
@@ -198,7 +176,6 @@ def create_splits(dataset: str):
             logger.info(f"Creating {split} csv")
             split_csv = datalists_dir.joinpath(f"{dataset}_{split}.csv")
             create_split_csv(split_dir, split_csv)
-        # timit comes with no validation set, so we create one from train set
         elif dataset.lower() == "timit" and split == "valid":
             logger.warning(f"{split_dir} missing, splitting train set instead")
             train_csv = datalists_dir.joinpath(f"{dataset}_train.csv")
@@ -210,7 +187,7 @@ def augment_dataset(dataset: str, config: dict):
     data_root = Path(os.environ["DATA_ROOT"])
     dataset_dir = data_root.joinpath(dataset)
     datalists_dir = dataset_dir.joinpath("datalists")
-    output_dir = dataset_dir.joinpath("modulated_tensors")
+    output_dir = dataset_dir.joinpath("modulated_npz")
     sr = config["sample_rate"]
     effects = config["effects"]
 
