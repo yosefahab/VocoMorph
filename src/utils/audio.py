@@ -61,6 +61,7 @@ def save_audio(
         audio = audio.astype(np.float32)
 
     # save the audio file
+    # logger.info(f"Saved audio to: {filepath}")
     sf.write(filepath, audio, sr)
 
 
@@ -104,27 +105,37 @@ def overlap_add(
     window: Optional[NDArray[np.float32]] = None,
 ) -> NDArray[np.float32]:
     """
-    Apply a processor function to overlapping chunks of an audio signal using the overlap-add method.
+    Apply a processor function to overlapping chunks of a 2D audio signal (C, T).
 
     Parameters:
-        audio: 1D float32 NumPy array of the input audio signal.
+        audio: 2D float32 NumPy array of the input audio signal with shape (channels, time).
         chunk_size: Number of samples in each frame.
         hop_size: Number of samples to advance for each frame.
         processor: Function applied to each chunk. Must return a chunk of the same shape.
         window: Optional window function. If None, Hann window is used.
 
     Returns:
-        Reconstructed audio signal as a 1D float32 NumPy array.
+        Reconstructed audio signal as a 2D float32 NumPy array with shape (channels, time).
     """
+    assert audio.ndim == 2, "Input audio must be a 2D array (channels, time)."
+
     if window is None:
         window = hann(chunk_size, sym=False).astype(np.float32)
 
-    output_len = len(audio) + chunk_size
-    output = np.zeros(output_len, dtype=np.float32)
+    channels, audio_len = audio.shape
+    output = np.zeros((channels, audio_len + chunk_size), dtype=np.float32)
 
-    for i in range(0, len(audio) - chunk_size + 1, hop_size):
-        chunk = audio[i : i + chunk_size] * window
-        processed = processor(chunk) * window
-        output[i : i + chunk_size] += processed
+    for i in range(0, audio_len, hop_size):
+        # 1. Get the chunk and pad with zeros if necessary
+        chunk = audio[:, i : i + chunk_size]
+        if chunk.shape[-1] < chunk_size:
+            chunk = np.pad(chunk, ((0, 0), (0, chunk_size - chunk.shape[-1])))
 
-    return output[: len(audio)]
+        # 2. Apply window and process
+        chunk_windowed = chunk * window  # Broadcasting the 1D window across channels
+        processed_windowed = processor(chunk_windowed) * window
+
+        # 3. Overlap-add the processed chunk to the output
+        output[:, i : i + chunk_size] += processed_windowed
+
+    return output[:, :audio_len]

@@ -55,8 +55,14 @@ def main(args: Namespace, config: DictConfig):
         checkpoints_dir = model_dir.joinpath("checkpoints")
         assert checkpoints_dir.exists()
 
-        checkpointer = Checkpointer(checkpoints_dir, config, model, [], [], None)
-        checkpointer.load_checkpoint(get_device(device_type))
+        import torch
+
+        checkpoint = torch.load(
+            args.checkpoint_path,
+            map_location=get_device(device_type),
+            weights_only=False,
+        )
+        model.load_state_dict(checkpoint["model_state_dict"])
 
         filepath = args.sample_file
         output_filename = Path(args.sample_file).stem

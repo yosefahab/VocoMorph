@@ -49,7 +49,7 @@ def parse_args():
     parser.add_argument(
         "--mode",
         choices=["train", "test", "infer_sample"],
-        default=None,
+        required=True,
         help="Specify mode: 'train' (training), 'test' (evaluation), or 'infer_sample' (inference on a sample).",
     )
     parser.add_argument(
@@ -101,14 +101,14 @@ if __name__ == "__main__":
     yaml_dict = parse_yaml(yaml_path)
     config = yaml_dict["config"]
 
-    module = "src.dataset.download_dataset"
-    module = import_module(module)
-    module.main(args.dataset)
-    module = "src.dataset.generate_dataset"
-    module = import_module(module)
-    module.main(args.dataset, config["data"])
+    if args.mode in ["train", "test"]:
+        module = "src.dataset.download_dataset"
+        module = import_module(module)
+        module.main(args.dataset)
+        module = "src.dataset.generate_dataset"
+        module = import_module(module)
+        module.main(args.dataset, config["data"])
 
-    if args.mode:
-        # import and run main function from trainer
-        module = import_module("src.main")
-        module.main(args, config)
+    # import and run main function from trainer
+    module = import_module("src.main")
+    module.main(args, config)
