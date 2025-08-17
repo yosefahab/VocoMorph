@@ -36,11 +36,7 @@ class DeconvBlock(nn.Module):
 
         diff = skip_features.size(2) - x.size(2)
         if diff > 0:
-            # pad only if necessary after the first convolution
             x = nn.functional.pad(x, [diff // 2, diff - diff // 2])
-        # elif diff < 0:
-        #     # If x is larger than skip_features, crop x
-        #     x = x[:, :, -diff // 2 : x.size(2) + diff // 2]
 
         # concatenate skip connection features along the channel dimension
         x = torch.cat([x, skip_features], dim=1)  # dim=1 for channels

@@ -22,14 +22,12 @@ class Encoder(nn.Module):
         )
 
     def forward(self, x, effect_embedding):
-        # Apply conv_block first
         x = self.conv_block(x)
 
-        # Apply FiLM layer to the output of the conv_block
-        # This output (x_processed) will be used for the skip connection
+        # x_processed will be used for the skip connection
         x_pre_pool = self.film_layer(x, effect_embedding)
 
-        # Apply pooling after FiLM for the main path
+        # apply pooling after FiLM for the main path
         x_post_pool = self.pool(x_pre_pool)
 
-        return x_post_pool, x_pre_pool  # Return both pooled and pre-pooled (for skip)
+        return x_post_pool, x_pre_pool

@@ -30,7 +30,9 @@ def main(args: Namespace, config: DictConfig):
 
     if args.mode == "train":
         set_seed(config["seed"])
-        strategy = DDPStrategy() if args.ddp else SingleDeviceStrategy()
+        strategy = (
+            DDPStrategy(device_type) if args.ddp else SingleDeviceStrategy(device_type)
+        )
         trainer = ModelTrainer(config, model_dir, model, strategy, device_type)
         splits = ["train", "valid", "test"]
         dataset_path = DATA_ROOT.joinpath(args.dataset)
@@ -40,7 +42,9 @@ def main(args: Namespace, config: DictConfig):
         trainer.train(epochs, loaders["train"], loaders["valid"], loaders["test"])
 
     elif args.mode == "test":
-        strategy = DDPStrategy() if args.ddp else SingleDeviceStrategy()
+        strategy = (
+            DDPStrategy(device_type) if args.ddp else SingleDeviceStrategy(device_type)
+        )
         trainer = ModelTrainer(config, model_dir, model, strategy, device_type)
         splits = ["test"]
         dataset_path = DATA_ROOT.joinpath(args.dataset)

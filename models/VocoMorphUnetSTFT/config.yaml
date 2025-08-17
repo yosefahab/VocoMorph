@@ -2,8 +2,8 @@ experiment: "VocoMorphUnetSTFT"
 notes: "Neural Vocal Modulator V2.1
   UNet & FiLM (Feature-wise Linear Modulation) layers
   are used to condition an audio on an Embedding Vector.
-  Input is STFT, (length * width) must be divisible by 2^number of unet blocks.
-  otherwise upsampling won't restore original size.
+  Input is STFT. The spectrogram's dimensions (frequency bins and time frames)
+  must each be divisible by 2^number_of_unet_levels for proper downsampling and upsampling.
   "
 # ------------------------------------------------------------------------------------------------------------------------------ #
 config:
@@ -16,21 +16,21 @@ config:
     drop_last: true
 
     channels: &var_num_channels 1 # mono/stereo
-    sample_rate: &var_sample_rate 16000
+    sample_rate: 16000
     n_mels: 80
-    n_fft: &var_n_fft 1024
-    win_length: &var_win_length 1024
-    hop_length: &var_hop_length 256
+    n_fft: &var_n_fft 2048 # Increased n_fft for more frequency bins
+    win_length: &var_win_length 2048
+    hop_length: &var_hop_length 128 # Adjusted hop_length
 
     # the chunk of audio the model processes at a time
-    chunk_size: &var_chunk_size 4096 # 256 ms at 16k
+    chunk_size: &var_chunk_size 8192 # 512 ms at 16k
     # max audio length during training
     max_length: 160000 # 10 sec at 16k sr, -1 if you dont want to trim
     overlap: 0
 
     batch_size:
-      train: 1024
-      valid: 1024
+      train: 4
+      valid: 4
       test: 1
 
     effects:
@@ -64,10 +64,10 @@ config:
   criterions:
     # - name: "EnergyLoss"
     #   weight: 10.0
-    #
-    # - name: "MSELoss"
-    #   weight: 1.0
-    #
+
+    - name: "MSELoss"
+      weight: 1.0
+
     - name: "SISNRLoss"
       weight: 1.0
 
@@ -136,11 +136,11 @@ config:
     dummy_input:
       - shape: [1]
         dtype: long
-      - shape: [1, 1, *var_sample_rate]
+      - shape: [1, 1, *var_chunk_size]
         dtype: float32
 
   checkpointer:
     save_interval: 5 # num epochs to save checkpoint
     save_best: true
-    keep_last_n: null # null or int
+    keep_last_n: 20 # null or int
     checkpoint_path: null # checkpoint to load or start from

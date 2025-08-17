@@ -9,10 +9,8 @@ class STFT(nn.Module):
         self.hop_length = config["hop_length"]
         self.win_length = config["win_length"]
         self.output_length = config["output_length"]
-        self.register_buffer(
-            "window",
-            torch.hann_window(self.n_fft + 2)[1:-1],
-        )
+        window = torch.hann_window(self.win_length)
+        self.register_buffer("window", window)
 
     def stft(self, x):
         B, C, T = x.shape
@@ -22,8 +20,7 @@ class STFT(nn.Module):
             n_fft=self.n_fft,
             hop_length=self.hop_length,
             win_length=self.win_length,
-            window=self.window,
-            center=False,
+            window=self.window,  # pyright: ignore[reportArgumentType]
             return_complex=True,
         )
         _, F, TT = stft_output.shape
@@ -37,13 +34,7 @@ class STFT(nn.Module):
             n_fft=self.n_fft,
             hop_length=self.hop_length,
             win_length=self.win_length,
-            # length=self.output_length,
             window=self.window,
-            center=False,
             return_complex=False,
         )
-        # assert self.output_length == istft_output.shape[-1], (
-        #     f"Shape mismatch, expected output wave of length {self.output_length} but got {istft_output.shape[-1]}"
-        # )
-        # return istft_output.view(B, C, self.output_length)
         return istft_output.view(B, C, -1)

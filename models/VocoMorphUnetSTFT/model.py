@@ -12,14 +12,11 @@ class VocoMorphUnetSTFT(nn.Module):
         super().__init__()
 
         self.chunk_size = config["chunk_size"]
-        window = torch.hann_window(self.chunk_size)
-        self.register_buffer("window", window.view(1, 1, -1))
-
-        self.overlap = config["overlap"]
-        self.stride = self.chunk_size - self.overlap
+        self.stft_params = config["module_stft"]
+        self.stft = STFT(self.stft_params)
 
         embedding_dim = config["embedding_dim"]
-        num_channels = config["num_channels"]
+        self.num_channels = config["num_channels"]
         encoder_filters = config["encoder_filters"]
         bottleneck_filters = config["bottleneck_filters"]
         decoder_filters = config["decoder_filters"]
@@ -30,14 +27,13 @@ class VocoMorphUnetSTFT(nn.Module):
             "Number of Encoder and Decoder blocks must match"
         )
 
-        self.stft = STFT(config["module_stft"])
         self.effect_encoder = EffectEncoder(config["num_effects"], embedding_dim)
 
         self.encoder_blocks = nn.ModuleList()
         for i in range(len(encoder_filters)):
             self.encoder_blocks.append(
                 Encoder(
-                    num_channels if i == 0 else encoder_filters[i - 1],
+                    self.num_channels if i == 0 else encoder_filters[i - 1],
                     encoder_filters[i],
                     kernel_size,
                     padding,
@@ -71,57 +67,33 @@ class VocoMorphUnetSTFT(nn.Module):
                 )
             )
 
-        self.final_conv = nn.Conv2d(decoder_filters[-1], num_channels, kernel_size=1)
+        self.final_conv = nn.Conv2d(
+            decoder_filters[-1], self.num_channels, kernel_size=1
+        )
+
+        # check for divisibility after STFT
+        # num_downsampling_steps = len(encoder_filters)
+        # T_stft = int(
+        #     torch.floor(
+        #         (torch.tensor(self.chunk_size) - self.stft_params["n_fft"])
+        #         / self.stft_params["hop_length"]
+        #     )
+        #     + 1
+        # )
+        # assert T_stft % (2**num_downsampling_steps) == 0, (
+        #     f"STFT time dimension ({T_stft}) is not divisible by 2^{num_downsampling_steps}"
+        # )
 
     def forward(self, x):
         effect_id, audio = x
-        _, _, T = audio.shape
 
-        # convert effect id to embedding
-        effect_embedding = self.effect_encoder(effect_id)
-
-        # pre-compute scale & shift once
-        output = torch.zeros_like(audio)
-        overlap_count = torch.zeros_like(audio)
-        for i in range(0, T, self.stride):
-            end_idx = min(T, i + self.chunk_size)
-            chunk = audio[:, :, i:end_idx]
-
-            # pad if needed
-            if chunk.shape[-1] < self.chunk_size:
-                pad = self.chunk_size - chunk.shape[-1]
-                chunk = nn.functional.pad(chunk, (0, pad))
-
-            chunk_audio = self.forward_one(chunk, effect_embedding)
-
-            # overlap add
-            output[:, :, i:end_idx] += chunk_audio[:, :, : end_idx - i]
-
-            window = self.window[..., : end_idx - i]
-            output[:, :, i:end_idx] += (
-                chunk_audio[:, :, : end_idx - i] * window[..., : end_idx - i]
-            )
-            overlap_count[:, :, i:end_idx] += window
-
-        output /= overlap_count.clamp(min=1e-6)
-        return output
-
-    def forward_one(self, chunk, effect_embedding):
-        # convert audio to spectrogram
-        chunk_stft = self.stft.stft(chunk)
-
-        # get the magnitude component
-        magnitude = torch.abs(chunk_stft)
-        # get the phase component
+        chunk_stft = self.stft.stft(audio)
+        magnitude = torch.abs(chunk_stft)  # Shape: [B, C, F, T_stft]
         phase = torch.angle(chunk_stft)
 
-        # pass through unet
-        x = magnitude
-        # assert that the padded dimensions are indeed divisible
-        assert x.shape[-1] * x.shape[-2] % (2 ** len(self.encoder_blocks)) == 0, (
-            f"input shape {x.shape} is not divisible by 2^{len(self.encoder_blocks)}"
-        )
+        effect_embedding = self.effect_encoder(effect_id)
 
+        x = magnitude
         skip_connections = []
         for encoder in self.encoder_blocks:
             x, skip = encoder(x, effect_embedding)
@@ -135,11 +107,14 @@ class VocoMorphUnetSTFT(nn.Module):
 
         x = self.final_conv(x)
 
-        # reconstruct audio using modulated magnitude & original phase
+        assert x.shape == magnitude.shape, (
+            f"Model output shape ({x.shape}) != magnitude shape ({magnitude.shape})"
+        )
+
         real = x * torch.cos(phase)
         imag = x * torch.sin(phase)
         modulated_complex = torch.complex(real, imag)
 
-        # convert spectrogram back into audio
-        chunk_audio = self.stft.istft(modulated_complex)
-        return chunk_audio
+        output_audio = self.stft.istft(modulated_complex)
+        assert output_audio.shape == audio.shape
+        return output_audio

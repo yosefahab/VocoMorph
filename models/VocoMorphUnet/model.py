@@ -75,62 +75,6 @@ class VocoMorphUnet(nn.Module):
 
         self.num_downsampling_steps = len(encoder_filters)
 
-    # def forward(self, x):
-    #     effect_id, audio = x
-    #     _, C, T = audio.shape
-    #     assert C == self.num_channels
-    #
-    #     # convert effect id to embedding
-    #     effect_embedding = self.effect_encoder(effect_id)
-    #
-    #     # pre-compute scale & shift once
-    #     output = torch.zeros_like(audio)
-    #     overlap_count = torch.zeros_like(audio)
-    #     for i in range(0, T, self.stride):
-    #         end_idx = min(T, i + self.chunk_size)
-    #         chunk = audio[:, :, i:end_idx]
-    #
-    #         chunk_audio = self.forward_one(chunk, effect_embedding)
-    #
-    #         # overlap add
-    #         window = self.window[..., : end_idx - i]
-    #         output[:, :, i:end_idx] += (
-    #             chunk_audio[:, :, : end_idx - i] * window[..., : end_idx - i]
-    #         )
-    #         overlap_count[:, :, i:end_idx] += window
-    #
-    #     output /= overlap_count.clamp(min=1e-6)
-    #     return output
-
-    # def forward_one(self, chunk, effect_embedding):
-    #     T = chunk.shape[-1]
-    #     if T < self.chunk_size:
-    #         pad = self.chunk_size - T
-    #         chunk = nn.functional.pad(chunk, (0, pad))
-    #
-    #     assert chunk.shape[-1] % (2 ** len(self.encoder_blocks)) == 0, (
-    #         f"chunk length ({chunk.shape[-1]}) is not divisible by 2^n_levels ({len(self.encoder_blocks)})"
-    #     )
-    #
-    #     x = chunk
-    #     skip_connections = []
-    #
-    #     for encoder in self.encoder_blocks:
-    #         x, skip = encoder(x, effect_embedding)
-    #         skip_connections.append(skip)
-    #
-    #     for bottleneck in self.bottleneck_blocks:
-    #         x, _ = bottleneck(x, effect_embedding)
-    #
-    #     for decoder, skip in zip(self.decoder_blocks, reversed(skip_connections)):
-    #         x = decoder(x, skip, effect_embedding)
-    #
-    #     x = self.final_conv(x)
-    #     assert x.shape == chunk.shape, (
-    #         f"model input shape ({chunk.shape}) != output shape ({x.shape})"
-    #     )
-    #     return x
-
     def forward(self, x):
         effect_id, audio_chunk = x
         _, C, T = audio_chunk.shape
