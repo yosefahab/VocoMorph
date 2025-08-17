@@ -17,7 +17,10 @@ assert os.environ.get("PROJECT_ROOT") is not None
 
 
 def main(args: Namespace, config: DictConfig):
-    model_dir = Path(os.environ["PROJECT_ROOT"]).joinpath("models", args.model)
+    PROJECT_ROOT = Path(os.environ["PROJECT_ROOT"])
+    DATA_ROOT = Path(os.environ["DATA_ROOT"])
+
+    model_dir = PROJECT_ROOT.joinpath("models", args.model)
     model = create_model_instance(model_dir, config["model"])
 
     device_type = args.device
@@ -30,7 +33,8 @@ def main(args: Namespace, config: DictConfig):
         strategy = DDPStrategy() if args.ddp else SingleDeviceStrategy()
         trainer = ModelTrainer(config, model_dir, model, strategy, device_type)
         splits = ["train", "valid", "test"]
-        loaders = get_dataloaders(splits, config["data"], args.ddp)
+        dataset_path = DATA_ROOT.joinpath(args.dataset)
+        loaders = get_dataloaders(dataset_path, splits, config["data"], args.ddp)
         epochs = config["trainer"]["max_epoch"]
 
         trainer.train(epochs, loaders["train"], loaders["valid"], loaders["test"])
@@ -38,7 +42,9 @@ def main(args: Namespace, config: DictConfig):
     elif args.mode == "test":
         strategy = DDPStrategy() if args.ddp else SingleDeviceStrategy()
         trainer = ModelTrainer(config, model_dir, model, strategy, device_type)
-        loaders = get_dataloaders(["test"], config["data"], args.ddp)
+        splits = ["test"]
+        dataset_path = DATA_ROOT.joinpath(args.dataset)
+        loaders = get_dataloaders(dataset_path, splits, config["data"], args.ddp)
 
         trainer.test(loaders["test"], args.out_wav_dir)
 
@@ -46,23 +52,18 @@ def main(args: Namespace, config: DictConfig):
         data_root = Path(os.environ.get("DATA_ROOT", ""))
         assert data_root.exists()
 
-        checkpointer = Checkpointer(
-            model_dir.joinpath("checkpoints"), config, model, [], [], None
-        )
+        checkpoints_dir = model_dir.joinpath("checkpoints")
+        assert checkpoints_dir.exists()
+
+        checkpointer = Checkpointer(checkpoints_dir, config, model, [], [], None)
         checkpointer.load_checkpoint(get_device(device_type))
 
+        filepath = args.sample_file
         output_filename = Path(args.sample_file).stem
         output_path = data_root.joinpath("output", output_filename)
         output_path.mkdir(exist_ok=True)
-        for i in range(len(config["data"]["effects"])):
-            infer(
-                i,
-                args.sample_file,
-                model,
-                config,
-                device_type=device_type,
-                output_path=output_path,
-            )
+        for effect_id in range(len(config["data"]["effects"])):
+            infer(effect_id, filepath, model, config, device_type, output_path)
 
     else:
         # TODO: live inference

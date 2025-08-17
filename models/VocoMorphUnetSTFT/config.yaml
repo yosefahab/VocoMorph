@@ -28,16 +28,10 @@ config:
     max_length: 160000 # 10 sec at 16k sr, -1 if you dont want to trim
     overlap: 0
 
-    datalists:
-      train:
-        batch_size: 32
-        path: "librispeech_train_augmented.csv"
-      valid:
-        batch_size: 32
-        path: "librispeech_valid_augmented.csv"
-      test:
-        batch_size: 1
-        path: "librispeech_test_augmented.csv"
+    batch_size:
+      train: 1024
+      valid: 1024
+      test: 1
 
     effects:
       [

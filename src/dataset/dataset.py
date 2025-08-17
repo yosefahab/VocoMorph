@@ -1,4 +1,3 @@
-import os
 import random
 import numpy as np
 from collections import OrderedDict
@@ -82,15 +81,12 @@ class VocoMorphDataset(Dataset):
 
 
 def get_dataloaders(
-    splits: List[str], config: dict, ddp: bool = False
+    dataset_path: Path, splits: List[str], config: dict, ddp: bool = False
 ) -> Dict[str, DataLoader]:
     dataloaders = {}
-    DATA_ROOT = Path(os.environ["DATA_ROOT"])
-    dataset_name = config["dataset"]
+
     for split in splits:
-        datalist_filepath = DATA_ROOT.joinpath(
-            dataset_name, "datalists", config["datalists"][split]["path"]
-        )
+        datalist_filepath = dataset_path.joinpath("datalists", f"{split}_augmented.csv")
 
         assert datalist_filepath.exists(), (
             f"Datalist for split {split} doesn't exist: {datalist_filepath}"
@@ -104,7 +100,7 @@ def get_dataloaders(
         logger.info(f"Using {num_workers} workers for DataLoaders")
         dataset = VocoMorphDataset(config, datalist_filepath=datalist_filepath)
         logger.info(f"Creating dataloader for split: {split}")
-        split_batch_size = config["datalists"][split]["batch_size"]
+        split_batch_size = config["batch_size"][split]
         logger.info(f"Using batch size {split_batch_size} for split: {split}")
 
         drop_last = config["drop_last"] if split == "train" else False

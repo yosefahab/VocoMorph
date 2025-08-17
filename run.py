@@ -24,10 +24,9 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--generate-dataset",
+        "--dataset",
         choices=["librispeech", "timit"],
-        nargs="?",
-        const="timit",
+        default="timit",
         help="Download a dataset. Default: timit.",
     )
     parser.add_argument(
@@ -74,13 +73,22 @@ def parse_args():
 
     args = parser.parse_args()
 
-    if args.mode == "infer_sample" and (args.sample_file is None):
-        parser.error("--sample-file is required when --mode is set to 'infer_sample'.")
+    if args.mode in ["train", "test"]:
+        if args.dataset is None:
+            parser.error(
+                "--dataset <dataset> is required when --mode is set to 'train' or 'test'."
+            )
 
-    if args.mode == "infer_sample" and (args.checkpoint_path is None):
-        parser.error(
-            "--checkpoint-path is required when --mode is set to 'infer_sample'."
-        )
+    elif args.mode == "infer_sample":
+        if args.sample_file is None:
+            parser.error(
+                "--sample-file is required when --mode is set to 'infer_sample'."
+            )
+
+        if args.checkpoint_path is None:
+            parser.error(
+                "--checkpoint-path is required when --mode is set to 'infer_sample'."
+            )
     return args
 
 
@@ -93,14 +101,12 @@ if __name__ == "__main__":
     yaml_dict = parse_yaml(yaml_path)
     config = yaml_dict["config"]
 
-    if args.generate_dataset:
-        module = "src.dataset.download_dataset"
-        module = import_module(module)
-        module.main(args.generate_dataset)
-        module = "src.dataset.generate_dataset"
-        module = import_module(module)
-        module.main(args.generate_dataset, config["data"])
-        exit(0)
+    module = "src.dataset.download_dataset"
+    module = import_module(module)
+    module.main(args.dataset)
+    module = "src.dataset.generate_dataset"
+    module = import_module(module)
+    module.main(args.dataset, config["data"])
 
     if args.mode:
         # import and run main function from trainer
