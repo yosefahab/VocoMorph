@@ -1,40 +1,44 @@
 from importlib import import_module
-from typing import Any, Callable, Dict, Iterable, List
+from typing import Any, Callable, Dict, List, TypeVar
 
-import torch.nn as nn
-import torch.optim as optim
-from torcheval import metrics
+import mlx.nn as nn
+import mlx.optimizers.optimizers as optim
+import mlx.optimizers.schedulers as sched
+import torchmetrics as tm
 
 from src.utils.logger import get_logger
-from src.utils.types import DictConfig, OptimizerScheduler, T
+from src.utils.types import DictConfig, T
 
 logger = get_logger(__name__)
 
 
-def load_class(category: str, lib_check: type, name: str) -> type[Any]:
+def load_class(category: str, lib_check: Any, name: str) -> Any:
     """Load a class from a module dynamically."""
     try:
         if hasattr(lib_check, name):
-            logger.info(f"Loading class {name} from {lib_check}")
+            logger.info(f"loading class {name} from {lib_check}")
             return getattr(lib_check, name)
-        logger.info(f"Loading custom class {name} from {category}")
+        # Custom classes
+        logger.info(f"loading custom class {name} from {category}")
         return getattr(import_module(f"src.trainer.custom.{category}"), name)
     except Exception as e:
-        logger.exception(f"Error loading class {name} from {lib_check}|{category}: {e}")
+        logger.exception(f"error loading class {name} from {lib_check}|{category}: {e}")
         exit(1)
 
 
 def create_instance(constructor: Callable[..., T], config: DictConfig) -> T:
+    """Creates an instance of a class with optional keyword arguments."""
     kwargs: DictConfig = config.get("params", {})
     return constructor(**kwargs)
 
 
 def get_instances(
     category: str,
-    lib_check: type,
+    lib_check: Any,
     configs: List[DictConfig],
     constructor: Callable[..., T],
 ) -> Dict[str, T]:
+    """Dynamically loads and instantiates classes based on a list of configurations."""
     return {
         entry["name"]: constructor(
             load_class(category, lib_check, entry["name"]), entry
@@ -43,44 +47,55 @@ def get_instances(
     }
 
 
-def get_criterions(config: List[DictConfig]) -> Dict[str, nn.Module]:
-    return get_instances("criterions", nn, config, create_instance)
-
-
-def get_metrics(config: List[DictConfig]) -> Dict[str, metrics.Metric]:
-    return get_instances("metrics", metrics, config, create_instance)
-
-
-def get_optimizers_and_schedulers(
-    config: List[DictConfig], parameters: Iterable[nn.Parameter]
-) -> List[OptimizerScheduler]:
+def get_criterions(config: List[DictConfig]) -> Dict[str, Any]:
     """
-    Creates optimizer instances and their associated scheduler instances.
-    Args:
-    - config: A list of dictionaries, where each dictionary defines an optimizer and optionally its scheduler.
-    - parameters: The model parameters to optimize.
-    Returns:
-        A list of tuples, each containing 'optimizer' and optional 'scheduler' pairs.
+    Dynamically loads and instantiates all loss functions from the configuration.
+    This version correctly handles both function-based and class-based losses.
     """
-    optimizer_scheduler_pairs: List[OptimizerScheduler] = []
+    result = {}
     for entry in config:
-        optimizer_name = entry["name"]
-        optimizer_cls: type[optim.Optimizer] = load_class(
-            "optimizers", optim, optimizer_name
-        )
-        optimizer_params = entry.get("params", {})
+        loss_fn_or_cls = load_class("criterions", nn.losses, entry["name"])
+        params = entry.get("params", {})
 
-        optimizer = optimizer_cls(parameters, **optimizer_params)
-        scheduler: optim.lr_scheduler._LRScheduler | None = None
-
-        scheduler_config: DictConfig | None = entry.get("scheduler")
-        if scheduler_config:
-            scheduler_name = scheduler_config["name"]
-            scheduler_cls: type[optim.lr_scheduler._LRScheduler] = load_class(
-                "schedulers", optim.lr_scheduler, scheduler_name
+        # Check if the object is a class (by seeing if it has a __call__ method
+        # and doesn't have a __dict__). This is a safe way to distinguish from
+        # a function.
+        if isinstance(loss_fn_or_cls, type):
+            # It's a class, so we instantiate it.
+            result[entry["name"]] = loss_fn_or_cls(**params)
+        else:
+            # It's a function, so we wrap it in a lambda to pass params.
+            result[entry["name"]] = (
+                lambda preds, targets, fn=loss_fn_or_cls, params=params: fn(
+                    preds, targets, **params
+                )
             )
-            scheduler_params = scheduler_config.get("params", {})
-            scheduler = scheduler_cls(optimizer, **scheduler_params)
 
-        optimizer_scheduler_pairs.append((optimizer, scheduler))
-    return optimizer_scheduler_pairs
+    return result
+
+
+def get_metrics(config: List[DictConfig]) -> Dict[str, tm.Metric]:
+    return get_instances("metrics", tm, config, create_instance)
+
+
+def get_optimizer(config: List[DictConfig]) -> optim.Optimizer:
+    """
+    Creates the MLX optimizer instance.
+    """
+    entry = config[0]
+    optimizer_name = entry["name"]
+    mlx_optimizer_cls: TypeVar = load_class("optimizers", optim, optimizer_name)
+    optimizer_params = entry.get("params", {})
+    scheduler_cfg = entry.get("scheduler")
+    lr_schedule = get_scheduler(scheduler_cfg) if scheduler_cfg else None
+    return mlx_optimizer_cls(**optimizer_params, learning_rate=lr_schedule)  # pyright: ignore[reportCallIssue]
+
+
+def get_scheduler(config: DictConfig) -> Callable[[int], float]:
+    """
+    Creates a functional scheduler that computes the learning rate per step.
+    """
+    scheduler_name = config["name"]
+    scheduler_cls = load_class("schedulers", sched, scheduler_name)
+    scheduler_params = config.get("params", {})
+    return scheduler_cls(**scheduler_params)

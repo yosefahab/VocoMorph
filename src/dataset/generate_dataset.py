@@ -87,14 +87,14 @@ def _augment_wav(args: Tuple[str, Path, int, Path, List[Tuple[int, Callable]]]):
     arrays_to_save: Dict[str, np.ndarray] = {"wave_0": raw_wave}
 
     for eid, ef in effects_funcs_with_ids:
-        modulated_wave = ef(audio=raw_wave, sr=sr)
-        arrays_to_save[f"wave_{eid}"] = modulated_wave
+        augmented_wave = ef(audio=raw_wave, sr=sr)
+        arrays_to_save[f"wave_{eid}"] = augmented_wave
 
     output_path = output_dir.joinpath(f"{wav_id}.npz")
     np.savez_compressed(output_path, **arrays_to_save)
 
     processed_data = []
-    # create one record for the raw wave (ID 0) and one for each modulated wave
+    # create one record for the raw wave (ID 0) and one for each augmented wave
     processed_data.append(
         {
             "ID": wav_id,
@@ -166,6 +166,7 @@ def augment_files(
 def create_splits(dataset: str):
     data_root = Path(os.environ["DATA_ROOT"])
     assert data_root.exists(), f"DATA_ROOT ({data_root}) does not exist!"
+
     dataset_dir = data_root.joinpath(dataset)
     datalists_dir = dataset_dir.joinpath("datalists")
     datalists_dir.mkdir(exist_ok=True)
@@ -174,12 +175,12 @@ def create_splits(dataset: str):
         split_dir = dataset_dir.joinpath(split)
         if split_dir.exists():
             logger.info(f"Creating {split} csv")
-            split_csv = datalists_dir.joinpath(f"{dataset}_{split}.csv")
+            split_csv = datalists_dir.joinpath(f"{split}.csv")
             create_split_csv(split_dir, split_csv)
         elif dataset.lower() == "timit" and split == "valid":
             logger.warning(f"{split_dir} missing, splitting train set instead")
-            train_csv = datalists_dir.joinpath(f"{dataset}_train.csv")
-            valid_csv = datalists_dir.joinpath(f"{dataset}_valid.csv")
+            train_csv = datalists_dir.joinpath("train.csv")
+            valid_csv = datalists_dir.joinpath("valid.csv")
             split_dataset_csv(train_csv, valid_csv)
 
 
@@ -187,15 +188,15 @@ def augment_dataset(dataset: str, config: dict):
     data_root = Path(os.environ["DATA_ROOT"])
     dataset_dir = data_root.joinpath(dataset)
     datalists_dir = dataset_dir.joinpath("datalists")
-    output_dir = dataset_dir.joinpath("modulated_npz")
+    output_dir = dataset_dir.joinpath("augmented")
     sr = config["sample_rate"]
     effects = config["effects"]
 
     logger.info(f"Preparing to augment dataset '{dataset}'")
 
     for split in ["train", "valid", "test"]:
-        input_csv = datalists_dir.joinpath(f"{dataset}_{split}.csv")
-        output_csv = datalists_dir.joinpath(f"{dataset}_{split}_augmented.csv")
+        input_csv = datalists_dir.joinpath(f"{split}.csv")
+        output_csv = datalists_dir.joinpath(f"{split}_augmented.csv")
 
         if not input_csv.exists():
             logger.warning(f"{input_csv} does not exist, skipping augmentation.")
@@ -212,5 +213,10 @@ def augment_dataset(dataset: str, config: dict):
 
 
 def main(dataset: str, config: dict):
+    augmented_dir = Path(os.environ["DATA_ROOT"], dataset, "augmented")
+    if augmented_dir.exists():
+        logger.info("Dataset already generated")
+        return
+
     create_splits(dataset)
     augment_dataset(dataset, config)

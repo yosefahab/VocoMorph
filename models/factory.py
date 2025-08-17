@@ -3,7 +3,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, Dict
 
-import torch.nn as nn
+import mlx.nn as nn
 
 from src.utils.logger import get_logger
 

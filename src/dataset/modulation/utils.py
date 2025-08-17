@@ -4,26 +4,10 @@ from typing import Callable, List, Tuple
 import librosa
 import matplotlib.pyplot as plt
 from numpy.typing import NDArray
-from torch import Tensor
 
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-def plot_tensors(tensors: List[Tensor]):
-    n = len(tensors)
-    fig, axes = plt.subplots(nrows=n, figsize=(8, 3 * n))
-    if n == 1:
-        axes = [axes]
-    for i, t in enumerate(tensors):
-        if t.is_complex():
-            t = t.abs()
-        img = axes[i].imshow(t.squeeze().cpu(), origin="lower", aspect="auto")
-        axes[i].set(title=f"Tensor-{i}")
-        fig.colorbar(img, ax=axes[i])
-    plt.tight_layout()
-    plt.show()
 
 
 def plot_waves(signals: List[Tuple[NDArray, float]]):
@@ -57,11 +41,11 @@ def get_functions_by_name(function_names: List[str]) -> List[Callable]:
     Returns:
         A list of callable function objects.
     """
-    # A cache to store function objects after the first lookup.
-    # This cache is local to this function and will not be a global variable.
+    # a cache to store function objects after the first lookup.
+    # this cache is local to this function and will not be a global variable.
     functions: dict[str, Callable] = {}
 
-    # Load the module once
+    # load the module once
     module = importlib.import_module("src.dataset.modulation.effects")
 
     def get_function_by_name(name):

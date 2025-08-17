@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from torch.optim.optimizer import Optimizer
+from mlx.optimizers.optimizers import Optimizer
 from torch.utils.tensorboard.writer import SummaryWriter
 
 from src.utils.logger import get_logger

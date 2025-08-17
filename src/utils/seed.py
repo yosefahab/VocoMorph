@@ -3,7 +3,6 @@ import random
 
 import mlx.core as mx
 import numpy as np
-import torch
 
 from src.utils.logger import get_logger
 
@@ -16,10 +15,4 @@ def set_seed(seed: int = 14):
     mx.random.seed(seed)
     np.random.seed(seed)
     random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.mps.manual_seed(seed)
-
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = True
     os.environ["PYTHONHASHSEED"] = str(seed)

@@ -1,33 +1,85 @@
+import mlx.core as mx
+from typing import Tuple, List
 from dataclasses import dataclass, field
-from typing import Callable, List, Tuple
-
-import torch
-import torch.nn.functional as F
-import torchaudio.transforms as T
 
 
-@dataclass(slots=True)
-class STFT:
-    n_fft: int
-    win_length: int
-    hop_length: int
+def _stft(
+    x: mx.array,
+    n_fft: int,
+    hop_length: int,
+    win_length: int,
+) -> mx.array:
+    """
+    Reimplements a simplified version of torch.stft using mlx.
+    """
+    if x.ndim == 3:
+        x = mx.reshape(x, (x.shape[0], -1))
 
-    stft_fn: Callable = field(init=False)
+    # create a hann window
+    window = mx.array(
+        [0.5 * (1 - mx.cos(2 * mx.pi * mx.arange(win_length) / (win_length - 1)))],
+        dtype=mx.float32,
+    )
 
-    def __post_init__(self):
-        self.stft_fn = lambda x: torch.stft(
-            x,
-            n_fft=self.n_fft,
-            hop_length=self.hop_length,
-            win_length=self.win_length,
-            return_complex=True,
-            window=torch.hann_window(self.win_length).to(x.device),
-        )
+    # pad the signal
+    pad_width = n_fft // 2
+    padded_x = mx.pad(x, ((0, 0), (pad_width, pad_width)))
 
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        if x.ndim == 3:
-            x = x.view(x.shape[0], -1)
-        return self.stft_fn(x)
+    # frame the signal by creating a strided view
+    num_frames = (padded_x.shape[1] - win_length) // hop_length + 1
+
+    # manually calculate strides in bytes
+    batch_stride = padded_x.shape[1] * padded_x.itemsize
+    frame_stride = hop_length * padded_x.itemsize
+    sample_stride = padded_x.itemsize
+
+    frames = mx.as_strided(
+        padded_x,
+        (x.shape[0], num_frames, win_length),
+        (batch_stride, frame_stride, sample_stride),
+    )
+
+    # apply window
+    frames = frames * window
+
+    # compute fft
+    stft_result = mx.fft.fft(frames, axis=-1)
+
+    return stft_result[:, :, : n_fft // 2 + 1]
+
+
+def _mel_fbank(
+    sample_rate: int,
+    n_fft: int,
+    n_mels: int,
+) -> mx.array:
+    """
+    Creates a mel-scale filter bank matrix.
+    """
+    min_mel = 0.0
+    max_mel = 2595.0 * mx.log10(1.0 + (sample_rate / 2.0) / 700.0)
+    mel_points = mx.linspace(min_mel, max_mel, n_mels + 2)
+    hz_points = 700.0 * (10.0 ** (mel_points / 2595.0) - 1.0)
+    bin_points = mx.floor((n_fft / sample_rate) * hz_points)
+
+    fbank = mx.zeros((n_mels, n_fft // 2 + 1))
+    for m in range(1, n_mels + 1):
+        f_m_minus = int(bin_points[m - 1].item())
+        f_m = int(bin_points[m].item())
+        f_m_plus = int(bin_points[m + 1].item())
+
+        if f_m_minus != f_m:
+            for k in range(f_m_minus, f_m):
+                fbank[m - 1, k] = (k - bin_points[m - 1]) / (
+                    bin_points[m] - bin_points[m - 1]
+                )
+        if f_m != f_m_plus:
+            for k in range(f_m, f_m_plus):
+                fbank[m - 1, k] = (bin_points[m + 1] - k) / (
+                    bin_points[m + 1] - bin_points[m]
+                )
+
+    return fbank
 
 
 @dataclass(slots=True)
@@ -37,23 +89,15 @@ class STFTLoss:
     hop_length: int
     alpha: float = 1.0  # weight for magnitude loss
     beta: float = 1.0  # weight for phase loss
-    stft_fn: STFT = field(init=False)
 
-    def __post_init__(self):
-        self.stft_fn = STFT(self.n_fft, self.win_length, self.hop_length)
+    def __call__(self, logits: mx.array, targets: mx.array):
+        logits_stft = _stft(logits, self.n_fft, self.hop_length, self.win_length)
+        targets_stft = _stft(targets, self.n_fft, self.hop_length, self.win_length)
 
-    def __call__(self, logits: torch.Tensor, targets: torch.Tensor):
-        logits_stft = self.stft_fn(logits)
-        targets_stft = self.stft_fn(targets)
-
-        mag_loss = F.l1_loss(
-            torch.abs(logits_stft), torch.abs(targets_stft), reduction="mean"
-        )
-        phase_loss = F.l1_loss(
-            torch.real(logits_stft), torch.real(targets_stft), reduction="mean"
-        ) + F.l1_loss(
-            torch.imag(logits_stft), torch.imag(targets_stft), reduction="mean"
-        )
+        mag_loss = mx.mean(mx.abs(mx.abs(logits_stft) - mx.abs(targets_stft)))
+        phase_loss = mx.mean(
+            mx.abs(mx.real(logits_stft) - mx.real(targets_stft))
+        ) + mx.mean(mx.abs(mx.imag(logits_stft) - mx.imag(targets_stft)))
 
         return self.alpha * mag_loss + self.beta * phase_loss
 
@@ -72,9 +116,10 @@ class MultiResolutionSTFTLoss:
             for n_fft, win_length, hop_length in self.resolutions
         ]
 
-    def __call__(self, logits: torch.Tensor, targets: torch.Tensor):
+    def __call__(self, logits: mx.array, targets: mx.array):
         assert logits.shape == targets.shape
-        return sum(stft_loss(logits, targets) for stft_loss in self.stft_losses)
+        total_loss = sum(stft_loss(logits, targets) for stft_loss in self.stft_losses)
+        return total_loss
 
 
 @dataclass(slots=True)
@@ -85,22 +130,19 @@ class MelSpecLoss:
     hop_length: int
     win_length: int
 
-    stft_fn: STFT = field(init=False)
-    mel_fn: T.MelScale = field(init=False)
+    mel_fbank: mx.array = field(init=False)
 
     def __post_init__(self):
-        self.stft_fn = STFT(self.n_fft, self.win_length, self.hop_length)
-        self.mel_fn = T.MelScale(
-            sample_rate=self.sample_rate,
-            n_stft=self.n_fft // 2 + 1,
-            n_mels=self.n_mels,
-        )
+        self.mel_fbank = _mel_fbank(self.sample_rate, self.n_fft, self.n_mels)
 
-    def __call__(self, logits: torch.Tensor, targets: torch.Tensor):
-        self.mel_fn.to(logits.device)
-        logits_mel = self.mel_fn(torch.abs(self.stft_fn(logits)))
-        targets_mel = self.mel_fn(torch.abs(self.stft_fn(targets)))
-        return F.l1_loss(logits_mel, targets_mel, reduction="mean")
+    def __call__(self, logits: mx.array, targets: mx.array):
+        logits_stft = _stft(logits, self.n_fft, self.hop_length, self.win_length)
+        targets_stft = _stft(targets, self.n_fft, self.hop_length, self.win_length)
+
+        logits_mel = mx.matmul(mx.abs(logits_stft), self.mel_fbank.T)
+        targets_mel = mx.matmul(mx.abs(targets_stft), self.mel_fbank.T)
+
+        return mx.mean(mx.abs(logits_mel - targets_mel))
 
 
 @dataclass(slots=True)
@@ -117,36 +159,25 @@ class VocalModulationLoss:
     hop_length: int
     win_length: int
 
-    stft_fn: Callable = field(init=False)
-    mel_fn: T.MelScale = field(init=False)
+    mel_fbank: mx.array = field(init=False)
 
     def __post_init__(self):
-        self.stft_fn = STFT(
-            n_fft=self.n_fft,
-            hop_length=self.hop_length,
-            win_length=self.win_length,
-        )
-        self.mel_fn = T.MelScale(
-            sample_rate=self.sample_rate,
-            n_stft=self.n_fft // 2 + 1,
-            n_mels=self.n_mels,
-        )
+        self.mel_fbank = _mel_fbank(self.sample_rate, self.n_fft, self.n_mels)
 
-    def __call__(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    def __call__(self, logits: mx.array, targets: mx.array) -> mx.array:
         """Computes the combined loss for vocal modulation."""
-        self.mel_fn.to(logits.device)
-        logits_stft = self.stft_fn(logits)
-        targets_stft = self.stft_fn(targets)
+        logits_stft = _stft(logits, self.n_fft, self.hop_length, self.win_length)
+        targets_stft = _stft(targets, self.n_fft, self.hop_length, self.win_length)
 
-        mag_loss = F.l1_loss(torch.abs(logits_stft), torch.abs(targets_stft))
-        phase_real_loss = F.l1_loss(torch.real(logits_stft), torch.real(targets_stft))
-        phase_imag_loss = F.l1_loss(torch.imag(logits_stft), torch.imag(targets_stft))
-        time_loss = F.l1_loss(logits, targets)
+        mag_loss = mx.mean(mx.abs(mx.abs(logits_stft) - mx.abs(targets_stft)))
+        phase_real_loss = mx.mean(mx.abs(mx.real(logits_stft) - mx.real(targets_stft)))
+        phase_imag_loss = mx.mean(mx.abs(mx.imag(logits_stft) - mx.imag(targets_stft)))
+        time_loss = mx.mean(mx.abs(logits - targets))
 
         # convert to magnitude spectrogram
-        logits_mel = self.mel_fn(torch.abs(logits_stft))
-        targets_mel = self.mel_fn(torch.abs(targets_stft))
-        mel_loss = F.l1_loss(logits_mel, targets_mel)
+        logits_mel = mx.matmul(mx.abs(logits_stft), self.mel_fbank.T)
+        targets_mel = mx.matmul(mx.abs(targets_stft), self.mel_fbank.T)
+        mel_loss = mx.mean(mx.abs(logits_mel - targets_mel))
 
         return (
             self.alpha * mag_loss
@@ -160,37 +191,31 @@ class VocalModulationLoss:
 class SISNRLoss:
     eps: float = 1e-8
 
-    def __call__(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    def __call__(self, preds: mx.array, targets: mx.array) -> mx.array:
         """
         Compute Scale-Invariant Signal-to-Noise Ratio (SI-SNR) loss.
-        Args:
-        - preds: (B, T)
-        - targets: (B, T)
-        Returns:
-            Negative SI-SNR as a loss (scalar)
         """
-        preds = preds - preds.mean(dim=-1, keepdim=True)
-        targets = targets - targets.mean(dim=-1, keepdim=True)
+        preds = preds - mx.mean(preds, axis=-1, keepdims=True)
+        targets = targets - mx.mean(targets, axis=-1, keepdims=True)
 
-        dot = torch.sum(preds * targets, dim=-1, keepdim=True)
-        target_energy = torch.sum(targets**2, dim=-1, keepdim=True) + self.eps
+        dot = mx.sum(preds * targets, axis=-1, keepdims=True)
+        target_energy = mx.sum(targets**2, axis=-1, keepdims=True) + self.eps
 
         scale = dot / target_energy
         projection = scale * targets
 
         noise = preds - projection
-        ratio = torch.sum(projection**2, dim=-1) / (
-            torch.sum(noise**2, dim=-1) + self.eps
-        )
-        si_snr = 10 * torch.log10(ratio + self.eps)
+        ratio = mx.sum(projection**2, axis=-1) / (mx.sum(noise**2, axis=-1) + self.eps)
+        # The key change: We ensure the ratio is non-negative before taking the logarithm.
+        si_snr = 10 * mx.log10(mx.maximum(ratio, self.eps))
 
-        return -si_snr.mean()
+        return -mx.mean(si_snr)
 
 
 @dataclass(slots=True)
 class EnergyLoss:
-    def __call__(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        output_energy = torch.mean(logits**2, dim=-1)
-        target_energy = torch.mean(targets**2, dim=-1)
-        energy_loss = F.mse_loss(output_energy, target_energy, reduction="mean")
+    def __call__(self, logits: mx.array, targets: mx.array) -> mx.array:
+        output_energy = mx.mean(logits**2, axis=-1)
+        target_energy = mx.mean(targets**2, axis=-1)
+        energy_loss = mx.mean(mx.abs(output_energy - target_energy))
         return energy_loss

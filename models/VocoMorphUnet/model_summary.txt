@@ -1,64 +1,130 @@
-==========================================================================================
-Layer (type:depth-idx)                   Output Shape              Param #
-==========================================================================================
-VocoMorphUnet                            [1, 1, 4096]              --
-├─EffectEncoder: 1-1                     [1, 32]                   --
-│    └─Embedding: 2-1                    [1, 1, 32]                160
-├─ModuleList: 1-2                        --                        --
-│    └─Encoder: 2-2                      [1, 32, 2048]             --
-│    │    └─ConvBlock: 3-1               [1, 32, 4096]             192
-│    │    └─FiLM: 3-2                    [1, 32, 4096]             2,112
-│    │    └─MaxPool1d: 3-3               [1, 32, 2048]             --
-│    └─Encoder: 2-3                      [1, 64, 1024]             --
-│    │    └─ConvBlock: 3-4               [1, 64, 2048]             6,336
-│    │    └─FiLM: 3-5                    [1, 64, 2048]             4,224
-│    │    └─MaxPool1d: 3-6               [1, 64, 1024]             --
-│    └─Encoder: 2-4                      [1, 128, 512]             --
-│    │    └─ConvBlock: 3-7               [1, 128, 1024]            24,960
-│    │    └─FiLM: 3-8                    [1, 128, 1024]            8,448
-│    │    └─MaxPool1d: 3-9               [1, 128, 512]             --
-│    └─Encoder: 2-5                      [1, 256, 256]             --
-│    │    └─ConvBlock: 3-10              [1, 256, 512]             99,072
-│    │    └─FiLM: 3-11                   [1, 256, 512]             16,896
-│    │    └─MaxPool1d: 3-12              [1, 256, 256]             --
-│    └─Encoder: 2-6                      [1, 512, 128]             --
-│    │    └─ConvBlock: 3-13              [1, 512, 256]             394,752
-│    │    └─FiLM: 3-14                   [1, 512, 256]             33,792
-│    │    └─MaxPool1d: 3-15              [1, 512, 128]             --
-├─ModuleList: 1-3                        --                        --
-│    └─Encoder: 2-7                      [1, 1024, 128]            --
-│    │    └─ConvBlock: 3-16              [1, 1024, 128]            1,575,936
-│    │    └─FiLM: 3-17                   [1, 1024, 128]            67,584
-│    │    └─Identity: 3-18               [1, 1024, 128]            --
-│    └─Encoder: 2-8                      [1, 1024, 128]            --
-│    │    └─ConvBlock: 3-19              [1, 1024, 128]            3,148,800
-│    │    └─FiLM: 3-20                   [1, 1024, 128]            67,584
-│    │    └─Identity: 3-21               [1, 1024, 128]            --
-├─ModuleList: 1-4                        --                        --
-│    └─Decoder: 2-9                      [1, 512, 256]             --
-│    │    └─DeconvBlock: 3-22            [1, 512, 256]             3,148,800
-│    │    └─FiLM: 3-23                   [1, 512, 256]             33,792
-│    └─Decoder: 2-10                     [1, 256, 512]             --
-│    │    └─DeconvBlock: 3-24            [1, 256, 512]             787,968
-│    │    └─FiLM: 3-25                   [1, 256, 512]             16,896
-│    └─Decoder: 2-11                     [1, 128, 1024]            --
-│    │    └─DeconvBlock: 3-26            [1, 128, 1024]            197,376
-│    │    └─FiLM: 3-27                   [1, 128, 1024]            8,448
-│    └─Decoder: 2-12                     [1, 64, 2048]             --
-│    │    └─DeconvBlock: 3-28            [1, 64, 2048]             49,536
-│    │    └─FiLM: 3-29                   [1, 64, 2048]             4,224
-│    └─Decoder: 2-13                     [1, 32, 4096]             --
-│    │    └─DeconvBlock: 3-30            [1, 32, 4096]             12,480
-│    │    └─FiLM: 3-31                   [1, 32, 4096]             2,112
-├─Conv1d: 1-5                            [1, 1, 4096]              33
-==========================================================================================
-Total params: 9,712,513
-Trainable params: 9,712,513
-Non-trainable params: 0
-Total mult-adds (Units.GIGABYTES): 2.36
-==========================================================================================
-Input size (MB): 0.02
-Forward/backward pass size (MB): 35.75
-Params size (MB): 38.85
-Estimated Total Size (MB): 74.62
-==========================================================================================
+VocoMorphUnet(
+  (effect_encoder): EffectEncoder(
+    (embedding): Embedding(5, 32)
+  )
+  (encoder_blocks.0): Encoder(
+    (conv_block): ConvBlock(
+      (conv1): Conv1d(1, 32, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+      (bn1): BatchNorm(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU()
+    )
+    (film_layer): FiLM(
+      (gamma_generator): Linear(input_dims=32, output_dims=32, bias=True)
+      (beta_generator): Linear(input_dims=32, output_dims=32, bias=True)
+    )
+    (pool): MaxPool1d(kernel_size=(2,), stride=(2,), padding=(0,))
+  )
+  (encoder_blocks.1): Encoder(
+    (conv_block): ConvBlock(
+      (conv1): Conv1d(32, 64, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+      (bn1): BatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU()
+    )
+    (film_layer): FiLM(
+      (gamma_generator): Linear(input_dims=32, output_dims=64, bias=True)
+      (beta_generator): Linear(input_dims=32, output_dims=64, bias=True)
+    )
+    (pool): MaxPool1d(kernel_size=(2,), stride=(2,), padding=(0,))
+  )
+  (encoder_blocks.2): Encoder(
+    (conv_block): ConvBlock(
+      (conv1): Conv1d(64, 128, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+      (bn1): BatchNorm(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU()
+    )
+    (film_layer): FiLM(
+      (gamma_generator): Linear(input_dims=32, output_dims=128, bias=True)
+      (beta_generator): Linear(input_dims=32, output_dims=128, bias=True)
+    )
+    (pool): MaxPool1d(kernel_size=(2,), stride=(2,), padding=(0,))
+  )
+  (encoder_blocks.3): Encoder(
+    (conv_block): ConvBlock(
+      (conv1): Conv1d(128, 256, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+      (bn1): BatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU()
+    )
+    (film_layer): FiLM(
+      (gamma_generator): Linear(input_dims=32, output_dims=256, bias=True)
+      (beta_generator): Linear(input_dims=32, output_dims=256, bias=True)
+    )
+    (pool): MaxPool1d(kernel_size=(2,), stride=(2,), padding=(0,))
+  )
+  (encoder_blocks.4): Encoder(
+    (conv_block): ConvBlock(
+      (conv1): Conv1d(256, 512, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+      (bn1): BatchNorm(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU()
+    )
+    (film_layer): FiLM(
+      (gamma_generator): Linear(input_dims=32, output_dims=512, bias=True)
+      (beta_generator): Linear(input_dims=32, output_dims=512, bias=True)
+    )
+    (pool): MaxPool1d(kernel_size=(2,), stride=(2,), padding=(0,))
+  )
+  (bottleneck_blocks.0): Encoder(
+    (conv_block): ConvBlock(
+      (conv1): Conv1d(512, 1024, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+      (bn1): BatchNorm(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU()
+    )
+    (film_layer): FiLM(
+      (gamma_generator): Linear(input_dims=32, output_dims=1024, bias=True)
+      (beta_generator): Linear(input_dims=32, output_dims=1024, bias=True)
+    )
+    (pool): Identity()
+  )
+  (bottleneck_blocks.1): Encoder(
+    (conv_block): ConvBlock(
+      (conv1): Conv1d(1024, 1024, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+      (bn1): BatchNorm(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU()
+    )
+    (film_layer): FiLM(
+      (gamma_generator): Linear(input_dims=32, output_dims=1024, bias=True)
+      (beta_generator): Linear(input_dims=32, output_dims=1024, bias=True)
+    )
+    (pool): Identity()
+  )
+  (decoder_blocks.0): Decoder(
+    (upsample): Upsample(scale_factor=2.0, mode='nearest', align_corners=False)
+    (conv1): Conv1d(1024, 512, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn1): BatchNorm(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (relu): ReLU()
+    (conv2): Conv1d(1024, 512, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn2): BatchNorm(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (decoder_blocks.1): Decoder(
+    (upsample): Upsample(scale_factor=2.0, mode='nearest', align_corners=False)
+    (conv1): Conv1d(512, 256, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn1): BatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (relu): ReLU()
+    (conv2): Conv1d(512, 256, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn2): BatchNorm(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (decoder_blocks.2): Decoder(
+    (upsample): Upsample(scale_factor=2.0, mode='nearest', align_corners=False)
+    (conv1): Conv1d(256, 128, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn1): BatchNorm(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (relu): ReLU()
+    (conv2): Conv1d(256, 128, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn2): BatchNorm(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (decoder_blocks.3): Decoder(
+    (upsample): Upsample(scale_factor=2.0, mode='nearest', align_corners=False)
+    (conv1): Conv1d(128, 64, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn1): BatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (relu): ReLU()
+    (conv2): Conv1d(128, 64, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn2): BatchNorm(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (decoder_blocks.4): Decoder(
+    (upsample): Upsample(scale_factor=2.0, mode='nearest', align_corners=False)
+    (conv1): Conv1d(64, 32, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn1): BatchNorm(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (relu): ReLU()
+    (conv2): Conv1d(64, 32, kernel_size=3, stride=1, padding=1, dilation=1, groups=1, bias=True)
+    (bn2): BatchNorm(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (final_conv): Conv1d(32, 1, kernel_size=1, stride=1, padding=0, dilation=1, groups=1, bias=True)
+)

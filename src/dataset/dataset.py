@@ -1,130 +1,89 @@
-import os
 import random
-import numpy as np
-from collections import OrderedDict
-from multiprocessing import cpu_count
+from functools import partial
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
+import mlx.core as mx
+import mlx.data as dx
+import numpy as np
 import pandas as pd
-import torch
-import torch.nn.functional as F
-from torch.utils.data.dataloader import DataLoader
-from torch.utils.data.dataset import Dataset
-from torch.utils.data.distributed import DistributedSampler
 
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class VocoMorphDataset(Dataset):
-    def __init__(self, config: dict, datalist_filepath: Path) -> None:
-        super().__init__()
+def load_and_chunk(sample: Dict, chunk_size: int) -> dict[str, mx.array]:
+    """
+    Loads raw and augmented waves from an .npz file and extracts a random chunk.
+    """
+    # decode bytes -> str
+    path = sample["data_path"].tobytes().decode("utf-8")
+    effect_id = int(sample["effect_id"])
 
-        self.logger = get_logger(self.__class__.__name__)
-        self.fs = config["sample_rate"]
-        self.channels = config["channels"]
-        self.chunk_size = config["chunk_size"]
+    archive = np.load(path)
 
-        self.datalist_filepath = datalist_filepath
-        self.npz_cache = OrderedDict()
-        self.cache_size = config.get("cache_size", 100)
-        self.df = pd.read_csv(datalist_filepath)
-        self.n = len(self.df)
-        self.logger.info(f"Dataset records = {self.n}")
+    full_raw_wave = mx.array(archive["wave_0"])
+    full_target_wave = mx.array(archive[f"wave_{effect_id}"])
 
-    def __len__(self) -> int:
-        return self.n
+    waveform_length: int = full_raw_wave.shape[1]  # pyright: ignore[reportIndexIssue]
 
-    def _load_npz_cache(self, filepath: str) -> Dict[str, np.ndarray]:
-        """Loads a .npz archive into the cache."""
-        if filepath not in self.npz_cache:
-            if len(self.npz_cache) >= self.cache_size:
-                self.npz_cache.popitem(last=False)
-            self.npz_cache[filepath] = np.load(filepath)
-        self.npz_cache.move_to_end(filepath)
-        return self.npz_cache[filepath]
-
-    def __getitem__(
-        self, index
-    ) -> Tuple[str, torch.Tensor, torch.Tensor, torch.Tensor]:
-        row = self.df.iloc[index]
-        item_id = str(row["ID"])
-        effect_id = int(row["effect_id"])
-        data_path = str(row["data_path"])
-
-        npz_archive = self._load_npz_cache(data_path)
-        full_raw = torch.from_numpy(npz_archive["wave_0"]).float()
-        full_target = torch.from_numpy(npz_archive[f"wave_{effect_id}"]).float()
-
-        waveform_length = full_raw.shape[1]
-        if waveform_length < self.chunk_size:
-            self.logger.warning(
-                f"Waveform {item_id} is too short ({waveform_length}) for chunk size {self.chunk_size}"
-            )
-            pad_len = self.chunk_size - waveform_length
-            full_raw = F.pad(full_raw, (0, pad_len))
-            full_target = F.pad(full_target, (0, pad_len))
-            start_idx = 0
-        else:
-            start_idx = random.randint(0, waveform_length - self.chunk_size)
-
-        raw_chunk = full_raw[:, start_idx : start_idx + self.chunk_size]
-        target_chunk = full_target[:, start_idx : start_idx + self.chunk_size]
-
-        assert raw_chunk.shape[1] == self.chunk_size
-        assert target_chunk.shape[1] == self.chunk_size
-
-        effect_id = torch.tensor(effect_id, dtype=torch.long)
-
-        return item_id, effect_id, raw_chunk, target_chunk
-
-
-def get_dataloaders(
-    splits: List[str], config: dict, ddp: bool = False
-) -> Dict[str, DataLoader]:
-    dataloaders = {}
-    DATA_ROOT = Path(os.environ["DATA_ROOT"])
-    dataset_name = config["dataset"]
-    for split in splits:
-        datalist_filepath = DATA_ROOT.joinpath(
-            dataset_name, "datalists", config["datalists"][split]["path"]
+    if waveform_length < chunk_size:
+        pad_len = chunk_size - waveform_length
+        full_raw_wave = mx.pad(full_raw_wave, [(0, 0), (0, pad_len)], mode="constant")
+        full_target_wave = mx.pad(
+            full_target_wave, [(0, 0), (0, pad_len)], mode="constant"
         )
+        start_idx = 0
+    else:
+        start_idx = random.randint(0, waveform_length - chunk_size)
+
+    raw_chunk = full_raw_wave[:, start_idx : start_idx + chunk_size]
+    target_chunk = full_target_wave[:, start_idx : start_idx + chunk_size]
+
+    effect_id_arr = mx.array(effect_id, dtype=mx.int8)
+
+    return {
+        "inputs": raw_chunk.tolist(),
+        "targets": target_chunk.tolist(),
+        "effect_id": effect_id_arr.tolist(),
+    }
+
+
+def get_data_streams(
+    dataset_path: Path, splits: List[str], config: dict
+) -> Dict[str, dx.Stream]:  # pyright: ignore[reportAttributeAccessIssue]
+    """
+    Creates mlx.data streams for each split.
+    """
+    data_streams = {}
+
+    for split in splits:
+        datalist_filepath = dataset_path / "datalists" / f"{split}_augmented.csv"
 
         assert datalist_filepath.exists(), (
             f"Datalist for split {split} doesn't exist: {datalist_filepath}"
         )
         logger.info(f"Loading {split} data from: {datalist_filepath}")
-        default_workers = max(1, cpu_count() - 2)
-        num_workers = config.get("num_workers")
-        if num_workers is None:
-            num_workers = default_workers
 
-        logger.info(f"Using {num_workers} workers for DataLoaders")
-        dataset = VocoMorphDataset(config, datalist_filepath=datalist_filepath)
-        logger.info(f"Creating dataloader for split: {split}")
-        split_batch_size = config["datalists"][split]["batch_size"]
-        logger.info(f"Using batch size {split_batch_size} for split: {split}")
+        df = pd.read_csv(datalist_filepath)
+        records = df.to_dict("records")
 
-        drop_last = config["drop_last"] if split == "train" else False
+        # encode string paths into bytes (MLX requirement)
+        for r in records:
+            r["data_path"] = r["data_path"].encode("utf-8")
 
-        sampler = None
-        if ddp:
-            logger.info(f"Creating DDP sampler for split: {split}")
-            sampler = DistributedSampler(
-                dataset=dataset, shuffle=(split == "train"), drop_last=drop_last
-            )
-
-        dataloader = DataLoader(
-            dataset=dataset,
-            batch_size=split_batch_size,
-            shuffle=(split == "train" and not ddp),
-            pin_memory=config.get("pin_memory", True),
-            num_workers=num_workers,
-            drop_last=drop_last,
-            sampler=sampler,
+        stream = (
+            dx.buffer_from_vector(records)  # pyright: ignore[reportAttributeAccessIssue]
+            .to_stream()
+            .sample_transform(partial(load_and_chunk, chunk_size=config["chunk_size"]))
+            .batch(batch_size=config["batch_size"][split])
+            # .prefetch(prefetch_size=2, num_threads=max((os.cpu_count() or 1) - 2, 1))
         )
-        dataloaders[split] = dataloader
 
-    return dataloaders
+        # if split == "train":
+        #     stream = stream.shuffle()
+
+        data_streams[split] = stream
+
+    return data_streams

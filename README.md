@@ -7,11 +7,11 @@ A Neural Voice Modulation Vocoder
 Contains the driver code for the entire project. `run.sh` is a wrapper around `run.py` for convenience.
 Optionally, set $PROJECT_ROOT env var to the directory of the project, otherwise it will be set automatically to the directory of `run.py`.
 You can also set $DATA_ROOT if you're storing your data elsewhere, otherwise it will be set automatically as $PROJECT_ROOT/data
-eg run: `python run.py --engine-mode train --model VocoMorph`
+eg run: `python run.py --mode train --model VocoMorph --dataset librispeech`
 
 ## run.sh
 
-Wrapper around run.py for convenience. It supports DDP training via `torchrun` or regular training (note: this adds the -ddp flag to run.py).
+Wrapper around run.py for convenience.
 
 ## Training
 
@@ -32,24 +32,11 @@ This is where config parameters for the model, as well as any other configuratio
 
 These are csv files that contain the paths to the training samples.
 
-```yaml
-datalists:
-  train:
-    batch_size: 1
-    path: "path/relative/to/$DATA_ROOT"
-  valid:
-    batch_size: 1
-    path: "path/relative/to/$DATA_ROOT"
-  test:
-    batch_size: 1
-    path: "path/relative/to/$DATA_ROOT"
-```
-
 It looks like this:
 
 ```csv
-ID,effect_id,raw_tensor_path,modulated_tensor_path 
-wave_id,effect_id,/path/to/raw_tensors/split/effect_id/0001.pt,/path/to/modulated_tensors/split/effect_id/wave_id.pt
+ID,effect_id,data_path
+wave_id,effect_id,/path/to/.npz
 ```
 
 **IMPORTANT**
@@ -80,34 +67,6 @@ Then add it to the list in:
 ```yaml
 data:
   effects: ["apply_my_effect"]
-```
-
-### Model summary
-
-`Trainer` supports dynamic model summary generation.
-if `dummy_input` key is present in the model config, it will use that blueprint to construct an input to be used in model summary.
-Without dummy_input less detailed information about the model will be displayed.
-
-for eg, to pass a tuple of (Tensor(1, torch.long), Tensor(1, 1, 16_000, torch.float32):
-
-```yaml
-dummy_input:
-  - shape: [1]
-    dtype: long
-  - shape: [1, 1, 16000]
-    dtype: float32
-```
-
-To pass a dict:
-
-```yaml
-dummy_input:
-  a:
-    - shape: [1]
-      dtype: long
-  b:
-    - shape: [1, 1, 16000]
-      dtype: float32
 ```
 
 ## Inference

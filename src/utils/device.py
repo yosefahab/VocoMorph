@@ -2,12 +2,12 @@ import mlx.core as mx
 from mlx.core import Device
 
 from src.utils.logger import get_logger
-from src.utils.types import DeviceType as _DeviceType
+from src.utils.types import DeviceType
 
 logger = get_logger(__name__)
 
 
-def set_device(device_type: _DeviceType = "gpu"):
+def set_device(device_type: DeviceType = "gpu"):
     """
     Selects device for executing models on (cpu or gpu).
     Args:
