@@ -54,7 +54,7 @@ class VocoMorphDataset(Dataset):
         data_path = str(row["data_path"])
 
         npz_archive = self._load_npz_cache(data_path)
-        full_raw = torch.from_numpy(npz_archive["wave_0"]).float()
+        full_raw = torch.from_numpy(npz_archive["raw"]).float()
         full_target = torch.from_numpy(npz_archive[f"wave_{effect_id}"]).float()
 
         waveform_length = full_raw.shape[1]

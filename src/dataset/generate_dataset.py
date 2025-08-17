@@ -75,34 +75,22 @@ def split_dataset_csv(
     df.iloc[train_end:valid_end].to_csv(output_csv, index=False)
 
 
-def _augment_wav(args: Tuple[str, Path, int, Path, List[Tuple[int, Callable]]]):
+def _augment_wav(args: Tuple[str, Path, int, Path, List[Callable]]):
     """
     Loads one audio file, applies effects, and saves all waveforms to a single .npz file.
     Returns a list of dictionaries for each generated effect.
     """
-    wav_id, raw_wav_path, sr, output_dir, effects_funcs_with_ids = args
+    wav_id, raw_wav_path, sr, output_dir, effects_funcs = args
 
     raw_wave, _ = load_audio(raw_wav_path, sr)
 
-    arrays_to_save: Dict[str, np.ndarray] = {"wave_0": raw_wave}
-
-    for eid, ef in effects_funcs_with_ids:
-        augmented_wave = ef(audio=raw_wave, sr=sr)
-        arrays_to_save[f"wave_{eid}"] = augmented_wave
-
+    arrays_to_save: Dict[str, np.ndarray] = {"raw": raw_wave}
     output_path = output_dir.joinpath(f"{wav_id}.npz")
-    np.savez_compressed(output_path, **arrays_to_save)
 
     processed_data = []
-    # create one record for the raw wave (ID 0) and one for each augmented wave
-    processed_data.append(
-        {
-            "ID": wav_id,
-            "effect_id": 0,
-            "data_path": str(output_path),
-        }
-    )
-    for eid, _ in effects_funcs_with_ids:
+    for eid, ef in enumerate(effects_funcs):
+        augmented_wave = ef(audio=raw_wave, sr=sr)
+        arrays_to_save[f"wave_{eid}"] = augmented_wave
         processed_data.append(
             {
                 "ID": wav_id,
@@ -110,6 +98,8 @@ def _augment_wav(args: Tuple[str, Path, int, Path, List[Tuple[int, Callable]]]):
                 "data_path": str(output_path),
             }
         )
+
+    np.savez_compressed(output_path, **arrays_to_save)
     return processed_data
 
 
@@ -133,9 +123,6 @@ def augment_files(
 
     effects_funcs = get_functions_by_name(effects)
 
-    # map each effect function to an ID, starting from 1
-    effects_funcs_with_ids = [(i, ef) for i, ef in enumerate(effects_funcs, start=1)]
-
     num_workers = max(1, int((os.cpu_count() or 1) * 0.8))
     logger.info(f"Using {num_workers} workers to augment ({len(df)}) files")
     results: List[Dict[str, Any]] = []
@@ -149,7 +136,7 @@ def augment_files(
                     Path(str(row["raw_wav_path"])),
                     sr,
                     output_dir,
-                    effects_funcs_with_ids,
+                    effects_funcs,
                 ),
             )
             for _, row in df.iterrows()
