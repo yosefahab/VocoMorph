@@ -7,9 +7,7 @@ import torch.nn as nn
 from numpy.typing import NDArray
 
 from src.utils.audio import load_audio, overlap_add, save_audio
-from src.utils.device import get_device
 from src.utils.logger import get_logger
-from src.utils.types import DeviceType
 
 logger = get_logger(__name__)
 
@@ -45,10 +43,9 @@ def infer(
     filepath: Path,
     model: nn.Module,
     config: dict,
-    device_type: DeviceType,
+    device: torch.device,
     output_path: Optional[Path] = None,
 ):
-    device = get_device(device_type)
     logger.info(f"running inference on: {filepath} with eid: {effect_id}")
     sr = config["data"]["sample_rate"]
     channels = config["data"]["channels"]

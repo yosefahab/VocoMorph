@@ -61,9 +61,10 @@ def main(args: Namespace, config: DictConfig):
 
         import torch
 
+        device = get_device(device_type)
         checkpoint = torch.load(
             args.checkpoint_path,
-            map_location=get_device(device_type),
+            map_location=device,
             weights_only=False,
         )
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -73,7 +74,7 @@ def main(args: Namespace, config: DictConfig):
         output_path = data_root.joinpath("output", output_filename)
         output_path.mkdir(exist_ok=True)
         for effect_id in range(len(config["data"]["effects"])):
-            infer(effect_id, filepath, model, config, device_type, output_path)
+            infer(effect_id, filepath, model, config, device, output_path)
 
     else:
         # TODO: live inference
