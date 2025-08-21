@@ -11,23 +11,25 @@ class STFT:
     n_fft: int
     win_length: int
     hop_length: int
+    eps: float = 1e-8
 
-    stft_fn: Callable = field(init=False)
+    window: torch.Tensor = field(init=False)
 
     def __post_init__(self):
-        self.stft_fn = lambda x: torch.stft(
+        self.window = torch.hann_window(self.win_length)
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        if x.ndim == 3:
+            x = x.view(x.shape[0], -1)
+        window = self.window.to(x.device)
+        return torch.stft(
             x,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
             win_length=self.win_length,
             return_complex=True,
-            window=torch.hann_window(self.win_length).to(x.device),
+            window=window,
         )
-
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        if x.ndim == 3:
-            x = x.view(x.shape[0], -1)
-        return self.stft_fn(x)
 
 
 @dataclass(slots=True)
@@ -35,12 +37,13 @@ class STFTLoss:
     n_fft: int
     win_length: int
     hop_length: int
-    alpha: float = 1.0  # weight for magnitude loss
-    beta: float = 1.0  # weight for phase loss
+    alpha: float = 1.0
+    beta: float = 1.0
+    eps: float = 1e-8
     stft_fn: STFT = field(init=False)
 
     def __post_init__(self):
-        self.stft_fn = STFT(self.n_fft, self.win_length, self.hop_length)
+        self.stft_fn = STFT(self.n_fft, self.win_length, self.hop_length, self.eps)
 
     def __call__(self, logits: torch.Tensor, targets: torch.Tensor):
         logits_stft = self.stft_fn(logits)
@@ -49,11 +52,12 @@ class STFTLoss:
         mag_loss = F.l1_loss(
             torch.abs(logits_stft), torch.abs(targets_stft), reduction="mean"
         )
-        phase_loss = F.l1_loss(
-            torch.real(logits_stft), torch.real(targets_stft), reduction="mean"
-        ) + F.l1_loss(
-            torch.imag(logits_stft), torch.imag(targets_stft), reduction="mean"
-        )
+
+        # Phase loss using cosine similarity
+        logits_flat = torch.view_as_real(logits_stft).flatten(1)
+        targets_flat = torch.view_as_real(targets_stft).flatten(1)
+        cos_sim = F.cosine_similarity(logits_flat, targets_flat, dim=-1)
+        phase_loss = (1.0 - cos_sim).mean()
 
         return self.alpha * mag_loss + self.beta * phase_loss
 
@@ -61,20 +65,21 @@ class STFTLoss:
 @dataclass(slots=True)
 class MultiResolutionSTFTLoss:
     resolutions: List[Tuple[int, int, int]]
-    alpha: float = 1.0  # weight for magnitude loss
-    beta: float = 1.0  # weight for phase loss
-
+    alpha: float = 1.0
+    beta: float = 1.0
+    eps: float = 1e-8
     stft_losses: List[STFTLoss] = field(init=False)
 
     def __post_init__(self):
         self.stft_losses = [
-            STFTLoss(n_fft, win_length, hop_length, self.alpha, self.beta)
+            STFTLoss(n_fft, win_length, hop_length, self.alpha, self.beta, self.eps)
             for n_fft, win_length, hop_length in self.resolutions
         ]
 
     def __call__(self, logits: torch.Tensor, targets: torch.Tensor):
         assert logits.shape == targets.shape
-        return sum(stft_loss(logits, targets) for stft_loss in self.stft_losses)
+        total_loss = sum(stft_loss(logits, targets) for stft_loss in self.stft_losses)
+        return total_loss / len(self.stft_losses)
 
 
 @dataclass(slots=True)

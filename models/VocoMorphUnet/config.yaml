@@ -29,13 +29,12 @@ config:
     overlap: 0
 
     batch_size:
-      train: 4
-      valid: 4
-      test: 1
+      train: 512
+      valid: 512
+      test: 32
 
     effects:
       [
-        "apply_identity_transform",
         "apply_radio_effect",
         "apply_robotic_effect",
         "apply_ghost_effect",
@@ -48,22 +47,16 @@ config:
     overlap: 0
     embedding_dim: 32
     num_effects: 5
-    encoder_filters: [32, 64, 128, 256, 512] # 5 levels
-    bottleneck_filters: [1024, 1024]
-    decoder_filters: [512, 256, 128, 64, 32] # 5 levels
+    encoder_filters: [64, 128, 256, 512, 1024] # 5 levels
+    bottleneck_filters: [2048, 2048]
+    decoder_filters: [1024, 512, 256, 128, 64] # 5 levels
     kernel_size: 3
     padding: 1
   # ------------------------------------------------------------ #
   # loss functions
   criterions:
-    # - name: "EnergyLoss"
-    #   weight: 10.0
-
-    - name: "MSELoss"
-      weight: 1.0
-
     - name: "SISNRLoss"
-      weight: 0.5
+      weight: 1.0
 
     - name: "MultiResolutionSTFTLoss"
       weight: 1.0
@@ -75,35 +68,13 @@ config:
             [1024, 1024, 256], # Good frequency resolution, medium time resolution
             [2048, 2048, 512], # Excellent frequency resolution, poor time resolution
           ]
-    # - name: "STFTLoss"
-    #   weight: 0.5
-    #   params:
-    #     alpha: 0.5
-    #     beta: 0.5
-    #     n_fft: *var_n_fft
-    #     hop_length: *var_hop_length
-    #     win_length: *var_win_length
-    #
-    # - name: "VocalModulationLoss"
-    #   weight: 0.7
-    #   params:
-    #     alpha: 0.5
-    #     beta: 0.2
-    #     gamma: 0.1
-    #     delta: 1.0
-    #     sample_rate: *var_sample_rate
-    #     n_mels: *var_n_mels
-    #     n_fft: *var_n_fft
-    #     hop_length: *var_hop_length
-    #     win_length: *var_win_length
-    #
   # ------------------------------------------------------------ #
   optimizers:
     - name: "AdamW"
       params:
-        lr: 5.0e-5
+        lr: 0.001
         betas: [0.9, 0.999]
-        weight_decay: 1.0e-5
+        weight_decay: 0.0005
       scheduler:
         name: "ReduceLROnPlateau"
         params:
@@ -111,9 +82,6 @@ config:
           min_lr: 1.0e-10
           factor: 0.8
           patience: 2
-        # name: "WarmupConstantSchedule"
-        #   params:
-        #     warmup_steps: 1000
   # ------------------------------------------------------------ #
   # metrics to evaluate the model on
   metrics: []
@@ -123,7 +91,7 @@ config:
     gpuid: [0]
     clip_norm: 5
     start_scheduling: 1
-    test_epochs: [1, 10, 25, 50, 75, 100]
+    test_epochs: [1, 25, 50, 75, 100]
     precision: "fp16"
     grad_accumulation_steps: 4
     dummy_input:
