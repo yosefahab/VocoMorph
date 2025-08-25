@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 
 from .modules.decoder import Decoder
@@ -11,11 +10,6 @@ class VocoMorphUnet(nn.Module):
         super().__init__()
 
         self.chunk_size = config["chunk_size"]
-        window = torch.hann_window(self.chunk_size)
-        self.register_buffer("window", window.view(1, 1, -1))
-
-        self.overlap = config["overlap"]
-        self.stride = self.chunk_size - self.overlap
 
         embedding_dim = config["embedding_dim"]
         self.num_channels = config["num_channels"]

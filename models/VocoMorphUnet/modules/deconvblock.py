@@ -9,7 +9,13 @@ class DeconvBlock(nn.Module):
     """
 
     def __init__(
-        self, in_channels, out_channels, kernel_size, padding, upscale_factor=2
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        padding,
+        upscale_factor=2,
+        dropout_p=0.2,
     ):
         super().__init__()
         self.upsample = nn.Upsample(scale_factor=upscale_factor, mode="nearest")
@@ -27,6 +33,7 @@ class DeconvBlock(nn.Module):
             padding=padding,
         )
         self.bn2 = nn.BatchNorm1d(out_channels)
+        self.skip_dropout = nn.Dropout(p=dropout_p)
 
     def forward(self, x, skip_features):
         x = self.upsample(x)
@@ -38,6 +45,8 @@ class DeconvBlock(nn.Module):
         if diff > 0:
             x = nn.functional.pad(x, [diff // 2, diff - diff // 2])
 
+        # apply dropout to skip connection before concatenation
+        skip_features = self.skip_dropout(skip_features)
         # concatenate skip connection features along the channel dimension
         x = torch.cat([x, skip_features], dim=1)  # dim=1 for channels
 

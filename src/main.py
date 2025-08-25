@@ -6,7 +6,6 @@ from pathlib import Path
 from models.factory import create_model_instance
 from src.dataset.dataset import get_dataloaders
 from src.infer import infer
-from src.trainer.checkpointer import Checkpointer
 from src.trainer.strategy import DDPStrategy, SingleDeviceStrategy
 from src.trainer.trainer import ModelTrainer
 from src.utils.device import get_device
