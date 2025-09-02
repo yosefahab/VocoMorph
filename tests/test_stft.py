@@ -1,4 +1,6 @@
 from pathlib import Path
+
+import numpy as np
 import torch
 
 from src.dataset.modulation.utils import plot_tensors, plot_waves
@@ -32,15 +34,31 @@ def compare_audios_stft(config: dict):
     win_length = config["win_length"]
     window = torch.hann_window(win_length)
 
-    waves = [
-        "data/timit/TEST/DR4/MGMM0/SA2.WAV",
-        "data/timit/modulated/00001_e0.wav",
-        "data/timit/modulated/00001_e1.wav",
-        "data/timit/modulated/00001_e2.wav",
-        "data/timit/modulated/00001_e3.wav",
-        "data/timit/modulated/00001_e4.wav",
-    ]
-    audios = [load_audio(Path(w), sr=sr, channels=channels)[0] for w in waves]
+    model_dir = Path(os.environ["DATA_ROOT"])
+
+    eid = 3
+
+    model_output_path = model_dir.joinpath(f"output/SI455/SI455_{eid}.wav")
+    model_output = load_audio(model_output_path, sr=sr, channels=channels)[0]
+
+    test_waves = np.load(model_dir.joinpath("timit/augmented/test/0302.npz"))
+    raw_wave = test_waves["raw"]
+    effect_wave = test_waves[f"wave_{eid}"]
+
+    audios = [raw_wave, effect_wave, model_output]
     specs = [stft(a, n_fft, hop_length, win_length, window) for a in audios]
     plot_waves([(a, sr) for a in audios])
     plot_tensors(specs)
+
+
+if __name__ == "__main__":
+    import os
+
+    from src.utils.parsers import parse_yaml
+
+    model_dir = Path(os.environ["PROJECT_ROOT"]).joinpath("models", "VocoMorphUnet")
+    assert model_dir.exists(), f"{model_dir} does not exist"
+    yaml_path = model_dir.joinpath("config.yaml")
+    yaml_dict = parse_yaml(yaml_path)
+    config = yaml_dict["config"]
+    compare_audios_stft(config["data"])
