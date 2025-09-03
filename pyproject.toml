@@ -62,14 +62,32 @@ dependencies = [
     "tensorboard==2.19.0",
     "tensorboard-data-server==0.7.2",
     "threadpoolctl==3.5.0",
-    "torch==2.6.0",
-    "torchaudio==2.6.0",
-    "torcheval==0.0.7",
-    "torchinfo==1.8.0",
-    "torchmetrics==1.6.3",
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "torchaudio==2.5.1",
+    "torcheval",
+    "torchinfo",
     "tqdm==4.67.1",
     "typing-extensions==4.12.2",
     "tzdata==2025.1",
     "urllib3==2.3.0",
     "werkzeug==3.1.3",
 ]
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform != 'linux'" },
+  { index = "pytorch-cu124", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+  { index = "pytorch-cpu", marker = "sys_platform != 'linux'" },
+  { index = "pytorch-cu124", marker = "sys_platform == 'linux'" },
+]
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
