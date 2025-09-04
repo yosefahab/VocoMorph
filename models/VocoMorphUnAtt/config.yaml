@@ -46,7 +46,7 @@ config:
     chunk_size: *var_chunk_size
     overlap: 0
     embedding_dim: 32
-    num_effects: 5
+    num_effects: 4
     num_heads: 4
     encoder_filters: [64, 128, 256, 512, 1024] # 5 levels
     bottleneck_filters: [2048, 2048]

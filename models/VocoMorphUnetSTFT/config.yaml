@@ -35,7 +35,6 @@ config:
 
     effects:
       [
-        "apply_identity_transform",
         "apply_radio_effect",
         "apply_robotic_effect",
         "apply_ghost_effect",
@@ -47,7 +46,7 @@ config:
     chunk_size: *var_chunk_size
     overlap: 0
     embedding_dim: 32
-    num_effects: 5
+    num_effects: 4
     encoder_filters: [32, 64, 128, 256, 512] # 5 levels
     bottleneck_filters: [1024, 1024]
     decoder_filters: [512, 256, 128, 64, 32] # 5 levels
@@ -81,7 +80,7 @@ config:
             [1024, 1024, 256], # Good frequency resolution, medium time resolution
             [2048, 2048, 512], # Excellent frequency resolution, poor time resolution
           ]
-    #
+
     # - name: "STFTLoss"
     #   weight: 0.5
     #   params:

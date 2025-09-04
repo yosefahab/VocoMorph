@@ -1,6 +1,6 @@
-experiment: "VocoMorphUnet"
-notes: "Neural Vocal Modulator V2.0
-  UNet & FiLM (Feature-wise Linear Modulation) layers
+experiment: "VocoMorphUnAttCond"
+notes: "Neural Vocal Modulator V4.0
+  UNet & EffectCrossAttention layers
   are used to condition an audio on an Embedding Vector.
   Input is raw audio, length must be divisible by 2^number of unet blocks.
   otherwise upsampling won't restore original size.
@@ -29,9 +29,9 @@ config:
     overlap: 0
 
     batch_size:
-      train: 512
-      valid: 512
-      test: 32
+      train: 4
+      valid: 4
+      test: 4
 
     effects:
       [
@@ -51,6 +51,7 @@ config:
     bottleneck_filters: [2048, 2048]
     decoder_filters: [1024, 512, 256, 128, 64] # 5 levels
     kernel_size: 3
+    num_heads: 4
     padding: 1
   # ------------------------------------------------------------ #
   # loss functions
