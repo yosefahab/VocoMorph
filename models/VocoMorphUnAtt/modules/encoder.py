@@ -14,7 +14,9 @@ class Encoder(nn.Module):
         padding,
         embedding_dim,
         apply_pool,
-        num_heads,
+        num_attn_heads,
+        use_sequence_atten=False,
+        use_channel_atten=False,
     ):
         super().__init__()
         self.conv_block = ConvBlock(
@@ -30,7 +32,10 @@ class Encoder(nn.Module):
         )
 
         self.attn = AttentionBlock(
-            out_channels, use_sequence=True, use_channel=True, num_heads=num_heads
+            out_channels,
+            use_sequence=use_sequence_atten,
+            use_channel=use_channel_atten,
+            num_heads=num_attn_heads,
         )
 
     def forward(self, x, effect_embedding):

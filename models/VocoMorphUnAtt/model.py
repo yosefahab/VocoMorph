@@ -36,7 +36,9 @@ class VocoMorphUnAtt(nn.Module):
                     padding,
                     embedding_dim,
                     apply_pool=True,
-                    num_heads=num_heads,
+                    num_attn_heads=num_heads,
+                    use_channel_atten=True,
+                    use_sequence_atten=False,
                 )
             )
 
@@ -50,7 +52,9 @@ class VocoMorphUnAtt(nn.Module):
                     padding,
                     embedding_dim,
                     apply_pool=False,
-                    num_heads=num_heads,
+                    num_attn_heads=num_heads,
+                    use_sequence_atten=True,
+                    use_channel_atten=True,
                 )
             )
 
@@ -64,6 +68,8 @@ class VocoMorphUnAtt(nn.Module):
                     padding,
                     embedding_dim,
                     num_heads=num_heads,
+                    use_channel_atten=True,
+                    use_sequence_atten=False,
                 )
             )
 

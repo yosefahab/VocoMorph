@@ -7,13 +7,24 @@ from .film import FiLM
 
 class Decoder(nn.Module):
     def __init__(
-        self, in_channels, out_channels, kernel_size, padding, embedding_dim, num_heads
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        padding,
+        embedding_dim,
+        num_heads,
+        use_sequence_atten=False,
+        use_channel_atten=False,
     ):
         super().__init__()
         self.deconv_block = DeconvBlock(in_channels, out_channels, kernel_size, padding)
         self.film_layer = FiLM(out_channels, embedding_dim)
         self.attn = AttentionBlock(
-            out_channels, use_sequence=True, use_channel=True, num_heads=num_heads
+            out_channels,
+            use_sequence=use_sequence_atten,
+            use_channel=use_channel_atten,
+            num_heads=num_heads,
         )
 
     def forward(self, x, skip_features, effect_embedding):
