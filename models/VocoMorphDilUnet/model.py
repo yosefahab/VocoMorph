@@ -18,6 +18,7 @@ class VocoMorphDilUnet(nn.Module):
         decoder_filters = config["decoder_filters"]
         kernel_size = config["kernel_size"]
         padding = config["padding"]
+        dilation = config["dilation"]
 
         assert len(encoder_filters) == len(decoder_filters), (
             "Number of Encoder and Decoder blocks must match"
@@ -27,7 +28,6 @@ class VocoMorphDilUnet(nn.Module):
 
         self.encoder_blocks = nn.ModuleList()
         for i, out_ch in enumerate(encoder_filters):
-            dilation = min(2**i, 16)  # cap at 16
             self.encoder_blocks.append(
                 Encoder(
                     self.num_channels if i == 0 else encoder_filters[i - 1],
@@ -41,7 +41,6 @@ class VocoMorphDilUnet(nn.Module):
 
         self.bottleneck_blocks = nn.ModuleList()
         for i, out_ch in enumerate(bottleneck_filters):
-            dilation = min(2 ** (len(encoder_filters) + i), 512)
             self.bottleneck_blocks.append(
                 Encoder(
                     encoder_filters[-1] if i == 0 else bottleneck_filters[i - 1],

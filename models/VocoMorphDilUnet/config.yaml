@@ -51,6 +51,7 @@ config:
     bottleneck_filters: [2048, 2048]
     decoder_filters: [1024, 512, 256, 128, 64] # 5 levels
     kernel_size: 3
+    dilation: 64
     padding: 1
   # ------------------------------------------------------------ #
   # loss functions
