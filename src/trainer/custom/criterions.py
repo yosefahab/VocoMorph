@@ -169,11 +169,14 @@ class SISNRLoss:
         """
         Compute Scale-Invariant Signal-to-Noise Ratio (SI-SNR) loss.
         Args:
-        - preds: (B, T)
-        - targets: (B, T)
+        - preds: (B, C, T)
+        - targets: (B, C, T)
         Returns:
             Negative SI-SNR as a loss (scalar)
         """
+        assert preds.ndim == targets.ndim == 3, (
+            f"Expected (B, C, T) shapes, got {preds.shape}, {targets.shape}"
+        )
         preds = preds - preds.mean(dim=-1, keepdim=True)
         targets = targets - targets.mean(dim=-1, keepdim=True)
 

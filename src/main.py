@@ -56,13 +56,21 @@ def main(args: Namespace, config: DictConfig):
         assert data_root.exists()
 
         checkpoints_dir = model_dir.joinpath("checkpoints")
-        assert checkpoints_dir.exists()
+        assert checkpoints_dir.exists(), f"{checkpoints_dir} doesn't exist"
 
         import torch
 
+        if args.checkpoint_path is not None:
+            checkpoint_path = args.checkpoint_path
+        else:
+            checkpoint_path = checkpoints_dir.joinpath("best_checkpoint.pt")
+            assert checkpoint_path.exists(), (
+                f"args.checkpoint_path was not provided and {checkpoint_path} does not exist"
+            )
+
         device = get_device(device_type)
         checkpoint = torch.load(
-            args.checkpoint_path,
+            checkpoint_path,
             map_location=device,
             weights_only=False,
         )
@@ -71,7 +79,7 @@ def main(args: Namespace, config: DictConfig):
         filepath = args.sample_file
         output_filename = Path(args.sample_file).stem
         output_path = data_root.joinpath("output", output_filename)
-        output_path.mkdir(exist_ok=True)
+        output_path.mkdir(parents=True, exist_ok=True)
         for effect_id in range(len(config["data"]["effects"])):
             infer(effect_id, filepath, model, config, device, output_path)
 
