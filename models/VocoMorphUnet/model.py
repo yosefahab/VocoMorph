@@ -58,8 +58,9 @@ class VocoMorphUnet(nn.Module):
                     (bottleneck_filters[-1] if i == 0 else decoder_filters[i - 1]),
                     decoder_filters[i],
                     kernel_size,
-                    padding,
-                    embedding_dim,
+                    padding=padding,
+                    embedding_dim=embedding_dim,
+                    skip_channels=(encoder_filters[len(encoder_filters) - 1 - i]),
                 )
             )
 
@@ -67,6 +68,7 @@ class VocoMorphUnet(nn.Module):
             decoder_filters[-1], self.num_channels, kernel_size=1
         )
 
+        self.final_activation = nn.Tanh()
         self.num_downsampling_steps = len(encoder_filters)
 
     def forward(self, x):
@@ -94,6 +96,7 @@ class VocoMorphUnet(nn.Module):
             x = decoder(x, skip, effect_embedding)
 
         x = self.final_conv(x)
+        x = self.final_activation(x)
         assert x.shape == audio_chunk.shape, (
             f"model input shape ({audio_chunk.shape}) != output shape ({x.shape})"
         )

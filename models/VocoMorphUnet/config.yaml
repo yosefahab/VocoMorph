@@ -1,5 +1,5 @@
 experiment: "VocoMorphUnet"
-notes: "Neural Vocal Modulator V2.0
+notes: "Neural Vocal Modulator V1.0
   UNet & FiLM (Feature-wise Linear Modulation) layers
   are used to condition an audio on an Embedding Vector.
   Input is raw audio, length must be divisible by 2^number of unet blocks.

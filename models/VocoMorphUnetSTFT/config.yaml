@@ -1,5 +1,5 @@
 experiment: "VocoMorphUnetSTFT"
-notes: "Neural Vocal Modulator V2.1
+notes: "Neural Vocal Modulator V1.1
   UNet & FiLM (Feature-wise Linear Modulation) layers
   are used to condition an audio on an Embedding Vector.
   Input is STFT. The spectrogram's dimensions (frequency bins and time frames)
