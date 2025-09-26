@@ -1,0 +1,108 @@
+experiment: "VocoMorphDiffAtt"
+notes: "Neural Vocal Modulator V4.0
+  UNet , Diffusion & Attention layers
+  are used to condition an audio on an Embedding Vector.
+  Input is raw audio, length must be divisible by 2^number of unet blocks.
+  otherwise upsampling won't restore original size.
+  "
+# ------------------------------------------------------------------------------------------------------------------------------ #
+config:
+  # ------------------------------------------------------------ #
+  seed: 13
+
+  data:
+    num_workers: null
+    pin_memory: true
+    drop_last: true
+
+    channels: &var_num_channels 1 # mono/stereo
+    sample_rate: 16000
+    n_mels: 80
+    n_fft: 1024
+    win_length: 1024
+    hop_length: 256
+
+    # the chunk of audio the model processes at a time
+    chunk_size: &var_chunk_size 16000 # 1000 ms at 16k
+    # max audio length during training
+    max_length: 80000 # 10 sec at 16k sr, -1 if you dont want to trim
+    overlap: 0
+
+    batch_size:
+      train: 8
+      valid: 8
+      test: 8
+
+    effects:
+      [
+        "apply_radio_effect",
+        "apply_robotic_effect",
+        "apply_ghost_effect",
+        "apply_demonic_effect",
+      ]
+  # ------------------------------------------------------------ #
+  model:
+    num_channels: *var_num_channels
+    chunk_size: *var_chunk_size
+    overlap: 0
+    embedding_dim: 32
+    num_effects: 4
+    encoder_filters: [64, 128, 256, 512, 1024] # 5 levels
+    bottleneck_filters: [2048, 2048]
+    decoder_filters: [1024, 512, 256, 128, 64] # 5 levels
+    kernel_size: 3
+    dilation: 64
+    padding: 1
+  # ------------------------------------------------------------ #
+  # loss functions
+  criterions:
+    - name: "SISNRLoss"
+      weight: 1.0
+
+    - name: "MultiResolutionSTFTLoss"
+      weight: 10.0
+      params:
+        alpha: 1.0
+        beta: 0.5
+        resolutions: [
+            [512, 512, 128], # Moderate frequency resolution, good time resolution
+            [1024, 1024, 256], # Good frequency resolution, medium time resolution
+            [2048, 2048, 512], # Excellent frequency resolution, poor time resolution
+          ]
+  # ------------------------------------------------------------ #
+  optimizers:
+    - name: "AdamW"
+      params:
+        lr: 0.001
+        betas: [0.9, 0.999]
+        weight_decay: 0.0005
+      scheduler:
+        name: "ReduceLROnPlateau"
+        params:
+          mode: "min"
+          min_lr: 1.0e-10
+          factor: 0.8
+          patience: 2
+  # ------------------------------------------------------------ #
+  # metrics to evaluate the model on
+  metrics: []
+  # ------------------------------------------------------------ #
+  trainer:
+    max_epoch: 100
+    gpuid: [0]
+    clip_norm: 5
+    start_scheduling: 1
+    test_epochs: [1, 25, 50, 75, 100]
+    precision: "fp16"
+    grad_accumulation_steps: 4
+    dummy_input:
+      - shape: [1]
+        dtype: long
+      - shape: [1, 1, *var_chunk_size]
+        dtype: float32
+
+  checkpointer:
+    save_interval: 5 # num epochs to save checkpoint
+    save_best: true
+    keep_last_n: 20 # null or int
+    checkpoint_path: null # checkpoint to load or start from
