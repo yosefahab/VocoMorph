@@ -17,8 +17,8 @@ class VocoMorphDiffAtt(nn.Module):
         decoder_filters = config["decoder_filters"]
         kernel_size = config["kernel_size"]
         padding = config["padding"]
-        attn_layers = config.get("attn_layers", [])
-        time_dim = config.get("time_dim", embedding_dim)
+        attn_layers = config["attn_layers"]
+        time_dim = config["time_dim"]
 
         self.effect_encoder = EffectEncoder(config["num_effects"], embedding_dim)
         self.time_embed = TimeEmbedding(time_dim)

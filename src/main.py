@@ -2,6 +2,7 @@ import os
 from argparse import Namespace
 from pathlib import Path
 
+import torch
 
 from models.factory import create_model_instance
 from src.dataset.dataset import get_dataloaders
@@ -57,8 +58,6 @@ def main(args: Namespace, config: DictConfig):
 
         checkpoints_dir = model_dir.joinpath("checkpoints")
         assert checkpoints_dir.exists(), f"{checkpoints_dir} doesn't exist"
-
-        import torch
 
         if args.checkpoint_path is not None:
             checkpoint_path = args.checkpoint_path
